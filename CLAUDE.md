@@ -176,6 +176,7 @@ S.saveRoutineFromWeek(wk, mode)  // "sunrise" or "fixed"
 
 > Keep concise. One line per item. Most recent at top.
 
+- **2026-06-27:** Git repo initialized; pushed to github.com/amnaaikhwan-source/brew-app; connected to Netlify (brewappwebtest3.netlify.app) with auto-deploy on push to main.
 - **2026-06-27:** Reorganized CLAUDE.md to serve as single source of truth with structured sections.
 - **2026-06-27:** Verified g-edit absolute positioning fix — all 4 slips render within viewport, no overflow.
 - **2026-06-27 (earlier session):** Added edit-block icon (✎) on Grind slips → opens planner menu with commit-unlock confirm. 7-cycle deterministic mug sticker rotations. Mug/pencil positioning refined (mug in bsq-group, pencil in dnum-row). Undo/redo changed to horizontal ↩↪. Whole-receipt clickable in planner. Celebration replays on empty→fill transition only.
