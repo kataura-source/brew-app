@@ -160,14 +160,23 @@ S.saveRoutineFromWeek(wk, mode)  // "sunrise" or "fixed"
 
 ## Next Priorities
 
-### Not yet built
+### Gamification (next web session)
+- **Badges** — earn badges for completing activities, streaks, milestones
+- **Coffee beans** — earn currency by completing blocks/brews
+- **Mug shop** — spend beans to unlock different pixel-art mugs to display on Daily Grind
+
+### iOS App (next major milestone)
+- The web prototype (`brew.html`) is feature-complete enough to start the iOS port
+- Stack: SwiftUI, EventKit (calendar export), camera (photo stamps), haptics
+- The web app serves as the full design/logic spec for the native build
+- Do NOT split brew.html into separate files until the iOS port begins
+
+### Not yet built (web)
 - Photo capture / stamps (IndexedDB store ready, UI not built)
 - Strava-style social feed
-- Native iOS port (SwiftUI, EventKit, camera, haptics)
 
 ### Improvements to consider
 - Calibrate sunrise to user's actual geolocation (beyond city picker)
-- Haptic feedback patterns (for native port)
 - Offline-first sync strategy for eventual multi-device support
 
 ---
