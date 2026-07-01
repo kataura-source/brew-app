@@ -339,11 +339,11 @@
   .tl-grip.top { top:0; } .tl-grip.bottom { bottom:0; }
   .tl-grip::before { content:""; width:22px; height:3px; border-radius:2px; background:rgba(255,255,255,.6); }
   .locked .tl-grip { display:none; }
-  .tl-mode { background:rgba(255,255,255,.22); border:1px solid rgba(255,255,255,.3); border-radius:3px;
-    font-size:7.5px; font-weight:800; font-family:var(--font); color:#fff; letter-spacing:.4px;
-    padding:1px 4px; line-height:1.2; margin-left:4px; flex-shrink:0;
-    cursor:pointer; opacity:.7; touch-action:manipulation; z-index:3; }
-  .tl-mode:active { opacity:1; }
+  .tl-mode { background:rgba(255,255,255,.28); border:1px solid rgba(255,255,255,.4); border-radius:3px;
+    font-size:8px; font-weight:800; font-family:var(--font); color:#fff; letter-spacing:.5px; text-transform:uppercase;
+    padding:2px 5px; line-height:1; margin-left:5px; flex-shrink:0;
+    cursor:pointer; touch-action:manipulation; z-index:3; }
+  .tl-mode:active { background:rgba(255,255,255,.5); }
 
   /* ---------- goals: café loyalty stamp cards ---------- */
   .loyalty { background:#faf4e6; border:1px solid #e7d9bd; border-radius:11px; padding:11px 13px; margin-top:10px;
@@ -503,6 +503,12 @@
     cursor:pointer; overflow:hidden; touch-action:manipulation; box-shadow:0 4px 10px -9px rgba(74,49,32,.5); }
   .mcell.out { opacity:.34; }
   .mcell.mtoday { border-color:var(--caramel); background:#fff7ec; }
+  .mcell.mprog { border-color:transparent; overflow:visible; }
+  .mcell.mprog::before { content:""; position:absolute; inset:-1px; border-radius:10px;
+    background:var(--ring); z-index:0; -webkit-mask:linear-gradient(#fff,#fff) content-box, linear-gradient(#fff,#fff);
+    -webkit-mask-composite:xor; mask-composite:exclude; padding:2.5px; pointer-events:none; }
+  .mcell.mprog.mtoday::before { padding:3px; }
+  .mcell.mprog > * { position:relative; z-index:1; }
   .mnum { font-size:12px; font-weight:700; color:var(--coffee); line-height:1; }
   .mhij { font-size:7.5px; color:var(--caramel-deep); opacity:.55; line-height:1; }
   .mstamp { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
@@ -1492,7 +1498,7 @@ const BrewStore = (function () {
     let tl="";
     BLOCKS.forEach(b=>{ const s=plan.blocks[b].slot; const top=(s.start-DAY_START)*ppm, hgt=Math.max(s.duration*ppm,6);
       const bc=S.blockConfig(b); const isFixed=bc.fixed!=null;
-      const modeBtn=locked?"":`<button class="tl-mode" data-action="tl-toggle-mode" data-b="${b}" title="${isFixed?"Switch to sunrise-relative":"Pin to fixed time"}">${isFixed?"𖤣":"☼"}</button>`;
+      const modeBtn=locked?"":`<button class="tl-mode" data-action="tl-toggle-mode" data-b="${b}" title="${isFixed?"Switch to sunrise-relative":"Pin to fixed time"}">${isFixed?"pin":"sun"}</button>`;
       tl+=`<div class="tl-block bk-${b}" data-b="${b}" style="top:${top}px;height:${hgt}px"><div class="tl-grip top"></div><span class="tl-let">${b}</span><span class="tl-nm">${WORD[b]}</span><span class="tl-time">${fmtT(s.start)}</span>${modeBtn}<div class="tl-grip bottom"></div></div>`; });
     const timeline=`<div class="timeline-wrap"><div class="timeline" id="timeline" style="height:${H}px">${hours}${sun}${nowLine}${tl}</div><button class="tl-info" data-action="planinfo" aria-label="About this schedule">!</button></div>`;
 
@@ -1628,7 +1634,7 @@ const BrewStore = (function () {
         s.blocks[b]={duration:bc.duration, fixed:Math.max(0,Math.min(1425,Math.round(cur/5)*5))};
       }
       S.saveSettings(s); S.applyDefaultsToDrafts(); buzz(10); renderPlan();
-      showToast(bc.fixed!=null?`${WORD[b]} now follows sunrise ☀️`:`${WORD[b]} pinned to ${fmtT(cur)} 📌`);
+      showToast(bc.fixed!=null?`${WORD[b]} now follows sunrise`:`${WORD[b]} pinned to ${fmtT(cur)}`);
     }
     else if(act==="routine-toggle"){ routineOpen=!routineOpen; renderPlan(); }
     else if(act==="save-sunrise"){ S.saveRoutineFromWeek(wk,"sunrise"); buzz(18); routineOpen=false; renderPlan();
@@ -1690,6 +1696,7 @@ const BrewStore = (function () {
     }
 
     function down(e){
+      if(e.target.closest(".tl-mode")) return;
       const el=e.currentTarget, b=el.dataset.b, slot0=S.getPlan(wk).blocks[b].slot, end0=slot0.start+slot0.duration;
       const r0=el.getBoundingClientRect(), offY=e.clientY-r0.top, hgt=el.offsetHeight;
       const hz=Math.min(13, hgt*0.34);
@@ -1881,7 +1888,17 @@ const BrewStore = (function () {
         const day=new Date(weekStart); day.setDate(weekStart.getDate()+d);
         const dk=S.dateKey(day), inMonth=day.getMonth()===month, isToday=dk===todayKey;
         const full=S.dayBrewCount(dk)===4;
-        cells+=`<div class="mcell ${inMonth?"":"out"} ${isToday?"mtoday":""} ${full?"mfull":""}" data-action="openday" data-dk="${dk}">
+        const done=BLOCKS.filter(b=>S.isBlockDone(dk,b));
+        const BCOL={B:"#3a2417",R:"#6e4321",E:"#cda871",W:"#b9824b"};
+        let ringStyle="";
+        if(done.length>0){
+          const slice=360/4; let stops=[], angle=0;
+          done.forEach(b=>{ stops.push(`${BCOL[b]} ${angle}deg`,`${BCOL[b]} ${angle+slice}deg`); angle+=slice; });
+          if(!full) stops.push(`transparent ${angle}deg`,`transparent 360deg`);
+          ringStyle=`--ring:conic-gradient(from -45deg,${stops.join(",")})`;
+        }
+        const progCls=done.length>0?"mprog":"";
+        cells+=`<div class="mcell ${inMonth?"":"out"} ${isToday?"mtoday":""} ${full?"mfull":""} ${progCls}" data-action="openday" data-dk="${dk}" ${ringStyle?`style="${ringStyle}"`:""}>
           <span class="mnum">${day.getDate()}</span><span class="mhij">${S.hijri(day,{day:"numeric"})}</span>${full?`<div class="mstamp" style="transform:rotate(${stickerRot(dk)}deg)">${pixelMug()}</div>`:""}${full&&S.isBackfilled(dk)?'<span class="bf-dot" title="Logged retroactively">✎</span>':""}</div>`;
       }
       html+=`<div class="mweek"><div class="mrow">${cells}</div>
