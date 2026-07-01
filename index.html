@@ -77,8 +77,8 @@
   .locked-day .g-line { pointer-events:none; }
   .locked-day .slip:not(.is-empty) { opacity:.92; }
   /* retroactive-edit marker — bottom-right of the month tile, clear of the edge and the mug sticker */
-  .mcell .bf-dot { position:absolute; bottom:3px; right:4px; font-size:9px; line-height:1; color:var(--caramel-deep);
-    background:var(--cream); border-radius:50%; padding:1px 3px; pointer-events:none; z-index:3; box-shadow:0 0 0 1px var(--foam); }
+  .mcell .bf-dot { position:absolute; bottom:2px; right:3px; font-size:8px; line-height:1; color:var(--caramel-deep);
+    opacity:.45; pointer-events:none; z-index:3; background:none; border:none; box-shadow:none; padding:0; }
 
   /* ---------- cup ---------- */
   .cupwrap { position: relative; display: flex; flex-direction: column; align-items: center; margin: 6px 0 2px; }
@@ -504,10 +504,10 @@
   .mcell.out { opacity:.34; }
   .mcell.mtoday { border-color:var(--caramel); background:#fff7ec; }
   .mcell.mprog { border-color:transparent; overflow:visible; }
-  .mcell.mprog::before { content:""; position:absolute; inset:-1px; border-radius:10px;
+  .mcell.mprog::before { content:""; position:absolute; inset:0; border-radius:9px;
     background:var(--ring); z-index:0; -webkit-mask:linear-gradient(#fff,#fff) content-box, linear-gradient(#fff,#fff);
-    -webkit-mask-composite:xor; mask-composite:exclude; padding:2.5px; pointer-events:none; }
-  .mcell.mprog.mtoday::before { padding:3px; }
+    -webkit-mask-composite:xor; mask-composite:exclude; padding:1.5px; pointer-events:none; }
+  .mcell.mprog.mtoday::before { padding:2px; }
   .mcell.mprog > .mnum, .mcell.mprog > .mhij, .mcell.mprog > .bf-dot { position:relative; z-index:1; }
   .mcell.mprog > .mstamp { z-index:1; }
   .mnum { font-size:12px; font-weight:700; color:var(--coffee); line-height:1; }
@@ -516,8 +516,8 @@
   .pmug { width:64%; opacity:.93; image-rendering:pixelated; image-rendering:crisp-edges; display:block; }
   .wmug { width:30px; margin:2px auto 0; }
   .wmug .pmug { width:100%; }
-  .mfull .mnum { opacity:.18; }
-  .mfull .mhij { opacity:.12; }
+  .mfull .mnum { display:none; }
+  .mfull .mhij { display:none; }
   .mrings { width:40px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
     background:none; border:none; cursor:pointer; padding:0; touch-action:manipulation; }
   .wrings { display:block; }
