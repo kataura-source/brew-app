@@ -340,7 +340,7 @@
   .tl-grip::before { content:""; width:22px; height:3px; border-radius:2px; background:rgba(255,255,255,.6); }
   .locked .tl-grip { display:none; }
   .tl-mode { background:rgba(255,255,255,.28); border:1px solid rgba(255,255,255,.4); border-radius:3px;
-    font-size:8px; font-weight:800; font-family:var(--font); color:#fff; letter-spacing:.5px; text-transform:uppercase;
+    font-size:11px; font-weight:900; font-family:var(--font); color:#fff; letter-spacing:.5px; text-transform:uppercase;
     padding:2px 5px; line-height:1; margin-left:5px; flex-shrink:0;
     cursor:pointer; touch-action:manipulation; z-index:3; }
   .tl-mode:active { background:rgba(255,255,255,.5); }
@@ -506,8 +506,8 @@
   .mcell.mprog { border-color:transparent; overflow:visible; }
   .mcell.mprog::before { content:""; position:absolute; inset:0; border-radius:9px;
     background:var(--ring); z-index:0; -webkit-mask:linear-gradient(#fff,#fff) content-box, linear-gradient(#fff,#fff);
-    -webkit-mask-composite:xor; mask-composite:exclude; padding:1.5px; pointer-events:none; }
-  .mcell.mprog.mtoday::before { padding:2px; }
+    -webkit-mask-composite:xor; mask-composite:exclude; padding:2px; pointer-events:none; }
+  .mcell.mprog.mtoday::before { padding:2.5px; }
   .mcell.mprog > .mnum, .mcell.mprog > .mhij, .mcell.mprog > .bf-dot { position:relative; z-index:1; }
   .mcell.mprog > .mstamp { z-index:1; }
   .mnum { font-size:12px; font-weight:700; color:var(--coffee); line-height:1; }
@@ -1499,7 +1499,7 @@ const BrewStore = (function () {
     let tl="";
     BLOCKS.forEach(b=>{ const s=plan.blocks[b].slot; const top=(s.start-DAY_START)*ppm, hgt=Math.max(s.duration*ppm,6);
       const bc=S.blockConfig(b); const isFixed=bc.fixed!=null;
-      const modeBtn=locked?"":`<button class="tl-mode" data-action="tl-toggle-mode" data-b="${b}" title="${isFixed?"Switch to sunrise-relative":"Pin to fixed time"}">${isFixed?"pin":"sun"}</button>`;
+      const modeBtn=locked?"":`<button class="tl-mode" data-action="tl-toggle-mode" data-b="${b}" title="${isFixed?"Switch to sunrise-relative":"Pin to fixed time"}">${isFixed?"𖤣":"☼"}</button>`;
       tl+=`<div class="tl-block bk-${b}" data-b="${b}" style="top:${top}px;height:${hgt}px"><div class="tl-grip top"></div><span class="tl-let">${b}</span><span class="tl-nm">${WORD[b]}</span><span class="tl-time">${fmtT(s.start)}</span>${modeBtn}<div class="tl-grip bottom"></div></div>`; });
     const timeline=`<div class="timeline-wrap"><div class="timeline" id="timeline" style="height:${H}px">${hours}${sun}${nowLine}${tl}</div><button class="tl-info" data-action="planinfo" aria-label="About this schedule">!</button></div>`;
 
@@ -2046,8 +2046,8 @@ const BrewStore = (function () {
     else if(t.dataset.action==="log-clear"){ S.clearRemovedLog(t.dataset.dk); renderLogModal(); }
     else if(t.dataset.action==="viewingrind"){
       logModal.classList.remove("on");
-      if(window.grindGoToDay) window.grindGoToDay(t.dataset.dk);
       showView("grind");
+      if(window.grindGoToDay) window.grindGoToDay(t.dataset.dk);
     }
   });
 
