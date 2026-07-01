@@ -508,7 +508,8 @@
     background:var(--ring); z-index:0; -webkit-mask:linear-gradient(#fff,#fff) content-box, linear-gradient(#fff,#fff);
     -webkit-mask-composite:xor; mask-composite:exclude; padding:2.5px; pointer-events:none; }
   .mcell.mprog.mtoday::before { padding:3px; }
-  .mcell.mprog > * { position:relative; z-index:1; }
+  .mcell.mprog > .mnum, .mcell.mprog > .mhij, .mcell.mprog > .bf-dot { position:relative; z-index:1; }
+  .mcell.mprog > .mstamp { z-index:1; }
   .mnum { font-size:12px; font-weight:700; color:var(--coffee); line-height:1; }
   .mhij { font-size:7.5px; color:var(--caramel-deep); opacity:.55; line-height:1; }
   .mstamp { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
