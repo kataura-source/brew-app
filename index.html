@@ -339,8 +339,10 @@
   .tl-grip.top { top:0; } .tl-grip.bottom { bottom:0; }
   .tl-grip::before { content:""; width:22px; height:3px; border-radius:2px; background:rgba(255,255,255,.6); }
   .locked .tl-grip { display:none; }
-  .tl-mode { position:absolute; top:2px; right:4px; background:none; border:none; font-size:11px;
-    cursor:pointer; opacity:.7; touch-action:manipulation; z-index:3; padding:2px; line-height:1; }
+  .tl-mode { background:rgba(255,255,255,.22); border:1px solid rgba(255,255,255,.3); border-radius:3px;
+    font-size:7.5px; font-weight:800; font-family:var(--font); color:#fff; letter-spacing:.4px;
+    padding:1px 4px; line-height:1.2; margin-left:4px; flex-shrink:0;
+    cursor:pointer; opacity:.7; touch-action:manipulation; z-index:3; }
   .tl-mode:active { opacity:1; }
 
   /* ---------- goals: café loyalty stamp cards ---------- */
@@ -905,6 +907,42 @@ const BrewStore = (function () {
   function isCommitted(wk){ const all=allPlans(); return !!(all[wk] && all[wk].committed); }
   function _mutate(wk, fn){ const p=getPlan(wk); fn(p); return savePlan(wk, p); }
   function setBlockSlot(wk,b,slot){ return _mutate(wk,p=>{ p.blocks[b].slot=slot; }); }
+  const TL_START=3*60, TL_END=13*60;
+  function sanitizeWeek(wk){
+    const p=getPlan(wk);
+    const sorted=BLOCKS.slice().sort((a,b)=>p.blocks[a].slot.start-p.blocks[b].slot.start);
+    let dirty=false;
+    sorted.forEach(bb=>{ const sl=p.blocks[bb].slot; const c=Math.max(TL_START,Math.min(TL_END-sl.duration,sl.start)); if(c!==sl.start){sl.start=c;dirty=true;} });
+    for(let i=1;i<sorted.length;i++){
+      const prev=p.blocks[sorted[i-1]].slot, cur=p.blocks[sorted[i]].slot;
+      if(cur.start<prev.start+prev.duration){ cur.start=prev.start+prev.duration; dirty=true; }
+    }
+    sorted.forEach(bb=>{ const sl=p.blocks[bb].slot; const c=Math.max(TL_START,Math.min(TL_END-sl.duration,sl.start)); if(c!==sl.start){sl.start=c;dirty=true;} });
+    if(dirty) savePlan(wk,p);
+    return p;
+  }
+  function setBlockTime(wk,b,newStart,newDur){
+    const p=getPlan(wk);
+    newStart=Math.max(TL_START,Math.min(TL_END-newDur,Math.round(newStart)));
+    p.blocks[b].slot={start:newStart,duration:newDur};
+    const movedEnd=newStart+newDur, movedMid=newStart+newDur/2;
+    const others=BLOCKS.filter(bb=>bb!==b);
+    const above=others.filter(bb=>p.blocks[bb].slot.start+p.blocks[bb].slot.duration/2<movedMid).sort((a,c)=>p.blocks[a].slot.start-p.blocks[c].slot.start);
+    const below=others.filter(bb=>p.blocks[bb].slot.start+p.blocks[bb].slot.duration/2>=movedMid).sort((a,c)=>p.blocks[a].slot.start-p.blocks[c].slot.start);
+    let ceiling=newStart;
+    for(let i=above.length-1;i>=0;i--){ const sl=p.blocks[above[i]].slot; if(sl.start+sl.duration>ceiling) sl.start=ceiling-sl.duration; ceiling=sl.start; }
+    let floor=movedEnd;
+    for(let i=0;i<below.length;i++){ const sl=p.blocks[below[i]].slot; if(sl.start<floor) sl.start=floor; floor=sl.start+sl.duration; }
+    BLOCKS.forEach(bb=>{ const sl=p.blocks[bb].slot; sl.start=Math.max(TL_START,Math.min(TL_END-sl.duration,sl.start)); });
+    const sorted=others.slice().sort((a,c)=>p.blocks[a].slot.start-p.blocks[c].slot.start);
+    for(let i=0;i<sorted.length;i++){
+      const sl=p.blocks[sorted[i]].slot;
+      if(sl.start<movedEnd&&sl.start+sl.duration>newStart) sl.start=sl.start<newStart?newStart-sl.duration:movedEnd;
+      sl.start=Math.max(TL_START,Math.min(TL_END-sl.duration,sl.start));
+      if(i>0){ const prev=p.blocks[sorted[i-1]].slot; if(sl.start<prev.start+prev.duration) sl.start=prev.start+prev.duration; }
+    }
+    return savePlan(wk,p);
+  }
   function setItemTarget(wk,b,id,target,label){ return _mutate(wk,p=>{ const it=p.blocks[b].items.find(x=>x.id===id);
     if(it){ it.target=target; if(label) it.label=label; } else { const ni={id,target}; if(label) ni.label=label; p.blocks[b].items.push(ni); } }); }
   function addItem(wk,b,id,label,target){ return setItemTarget(wk,b,id,target||4,label); }
@@ -923,6 +961,7 @@ const BrewStore = (function () {
       const p=getPlan(wk), sr=weekSunriseMin(wk);
       for(const b of BLOCKS){ p.blocks[b].slot={ start:blockStart(b,sr), duration:blockConfig(b).duration }; }
       savePlan(wk, p);
+      sanitizeWeek(wk);
     }
   }
   // Save a week's block TIMES as the default schedule in Settings. Activities/slips are left alone
@@ -1083,7 +1122,7 @@ const BrewStore = (function () {
     getSettings, getSavedSettings, saveSettings, setSettingsOverride, clearSettingsOverride,
     weekStartDow, blockConfig, blockStart, BLOCK_DEFAULTS,
     dateKey, weekKey, weekDates, mondayOf, parseKey, addWeeks, hijri, sunriseMin, weekSunriseMin, tzOffsetMin,
-    getPlan, savePlan, defaultPlan, isCommitted, setBlockSlot, setItemTarget, addItem, removeItem, setBlockItems,
+    getPlan, savePlan, defaultPlan, isCommitted, setBlockSlot, setBlockTime, sanitizeWeek, setItemTarget, addItem, removeItem, setBlockItems,
     commitWeek, plannedIds, repeatLastWeek, applyDefaultsToDrafts, saveRoutineFromWeek,
     getDay, setDay, toggleItem, setItemDone, isItemDone, isBlockDone, dayBrewCount, isFullBrew, setBlockDone,
     goalProgress, weekFullBrewDays, weekStreakKept, getLog, getActiveLog, clearRemovedLog, removeLogEntry,
@@ -1384,7 +1423,6 @@ const BrewStore = (function () {
   function fmtT(min){ let h=Math.floor(min/60), m=min%60; const ap=h<12?"am":"pm"; let hh=h%12||12; return hh+":"+String(m).padStart(2,"0")+ap; }
   function durLabel(min){ const h=Math.floor(min/60), m=min%60; return (h?h+"h":"")+(h&&m?" ":"")+(m?m+"m":(h?"":"0m")); }
   function countLabel(t){ return t+"×"; }
-  function clampStart(min,dur){ dur=dur||30; return Math.max(DAY_START, Math.min(DAY_END-dur, Math.round(min/5)*5)); }
   function curWk(){ return S.addWeeks(S.weekKey(), weekOffset); }
   function gd(d){ return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"}); }
   function weekLabel(wk){ const m=S.parseKey(wk); const e=new Date(m); e.setDate(m.getDate()+6); return gd(m)+" – "+gd(e); }
@@ -1431,7 +1469,8 @@ const BrewStore = (function () {
 
   /* ========================= PLANNER ========================= */
   function renderPlan(){
-    const wk=curWk(), plan=S.getPlan(wk), locked=plan.committed, isThis=weekOffset===0;
+    const wk=curWk(); S.sanitizeWeek(wk);
+    const plan=S.getPlan(wk), locked=plan.committed, isThis=weekOffset===0;
 
     // timeline: 1-hour rows, with a fainter gridline at each half-hour (3am–1pm)
     const PXH=24, H=Math.round((RANGE/60)*PXH), ppm=H/RANGE;
@@ -1453,7 +1492,7 @@ const BrewStore = (function () {
     let tl="";
     BLOCKS.forEach(b=>{ const s=plan.blocks[b].slot; const top=(s.start-DAY_START)*ppm, hgt=Math.max(s.duration*ppm,6);
       const bc=S.blockConfig(b); const isFixed=bc.fixed!=null;
-      const modeBtn=locked?"":` <button class="tl-mode" data-action="tl-toggle-mode" data-b="${b}" title="${isFixed?"Switch to sunrise-relative":"Pin to fixed time"}">${isFixed?"📌":"☀️"}</button>`;
+      const modeBtn=locked?"":`<button class="tl-mode" data-action="tl-toggle-mode" data-b="${b}" title="${isFixed?"Switch to sunrise-relative":"Pin to fixed time"}">${isFixed?"PIN":"SUN"}</button>`;
       tl+=`<div class="tl-block bk-${b}" data-b="${b}" style="top:${top}px;height:${hgt}px"><div class="tl-grip top"></div><span class="tl-let">${b}</span><span class="tl-nm">${WORD[b]}</span><span class="tl-time">${fmtT(s.start)}</span>${modeBtn}<div class="tl-grip bottom"></div></div>`; });
     const timeline=`<div class="timeline-wrap"><div class="timeline" id="timeline" style="height:${H}px">${hours}${sun}${nowLine}${tl}</div><button class="tl-info" data-action="planinfo" aria-label="About this schedule">!</button></div>`;
 
@@ -1562,10 +1601,10 @@ const BrewStore = (function () {
     else if(act==="count"){ histRecord(); const it=S.getPlan(wk).blocks[b].items.find(x=>x.id===id); const t=it?(it.target%7)+1:1; S.setItemTarget(wk,b,id,t); buzz(10); renderPlan(); }
     else if(act==="remove"){ histRecord(); S.removeItem(wk,b,id); renderPlan(); }
     else if(act==="add"){ histRecord(); S.addItem(wk,b,id); buzz(12); renderPlan(); }
-    else if(act==="start-"){ histRecord(); const s=slot(); S.setBlockSlot(wk,b,{start:clampStart(s.start-5,s.duration),duration:s.duration}); renderPlan(); }
-    else if(act==="start+"){ histRecord(); const s=slot(); S.setBlockSlot(wk,b,{start:clampStart(s.start+5,s.duration),duration:s.duration}); renderPlan(); }
-    else if(act==="dur-"){ histRecord(); const s=slot(); const dur=Math.max(5,s.duration-5); S.setBlockSlot(wk,b,{start:clampStart(s.start,dur),duration:dur}); renderPlan(); }
-    else if(act==="dur+"){ histRecord(); const s=slot(); const dur=Math.min(240,s.duration+5); S.setBlockSlot(wk,b,{start:clampStart(s.start,dur),duration:dur}); renderPlan(); }
+    else if(act==="start-"){ histRecord(); const s=slot(); S.setBlockTime(wk,b,s.start-5,s.duration); renderPlan(); }
+    else if(act==="start+"){ histRecord(); const s=slot(); S.setBlockTime(wk,b,s.start+5,s.duration); renderPlan(); }
+    else if(act==="dur-"){ histRecord(); const s=slot(); S.setBlockTime(wk,b,s.start,Math.max(5,s.duration-5)); renderPlan(); }
+    else if(act==="dur+"){ histRecord(); const s=slot(); S.setBlockTime(wk,b,s.start,Math.min(240,s.duration+5)); renderPlan(); }
     else if(act==="commit"){ if(!BLOCKS.some(bb=>S.getPlan(wk).blocks[bb].items.length>0)) return; S.commitWeek(wk,true); openSlip=null; buzz(20); renderPlan(); updateStreakBadge(); }
     else if(act==="unlock"){ S.commitWeek(wk,false); renderPlan(); }
     else if(act==="reset-order"){ if(confirm("Clear all items from all four blocks?")){ histRecord(); BLOCKS.forEach(bb=>S.setBlockItems(wk,bb,[])); openSlip=null; renderPlan(); } }
@@ -1619,44 +1658,35 @@ const BrewStore = (function () {
   // Collision detection: displaced blocks push above/below during drag, return when clear.
   function attachDrag(ppm,H,wk){
     const tl=document.getElementById("timeline"); if(!tl) return;
-    const MIN=5, snap1=m=>Math.round(m);   // 1-min precision on drag
+    const MIN=5, snap1=m=>Math.round(m);
     const allEls={}; tl.querySelectorAll(".tl-block").forEach(el=>{ allEls[el.dataset.b]=el; el.addEventListener("pointerdown", down); });
-    // snapshot original positions for all blocks so displaced ones can return
     const orig={}; BLOCKS.forEach(bb=>{ const sl=S.getPlan(wk).blocks[bb].slot; orig[bb]={start:sl.start,duration:sl.duration}; });
 
-    function pushBlocks(dragB, dragStart, dragDur){
-      // resolve collisions: push other blocks out of the way, preserving their durations
-      const dragEnd=dragStart+dragDur;
+    function livePreview(dragB, dragStart, dragDur){
+      const dragEnd=dragStart+dragDur, dragMid=dragStart+dragDur/2;
       const pos={}; BLOCKS.forEach(bb=>{ pos[bb]=bb===dragB?{start:dragStart,duration:dragDur}:{start:orig[bb].start,duration:orig[bb].duration}; });
-      // sort non-drag blocks by original start
-      const others=BLOCKS.filter(bb=>bb!==dragB).sort((a,b)=>orig[a].start-orig[b].start);
-      others.forEach(bb=>{
-        const p=pos[bb], pEnd=p.start+p.duration;
-        // if this block overlaps the dragged block, push it
-        if(p.start<dragEnd && pEnd>dragStart){
-          // push in the direction of least displacement
-          const pushDown=dragEnd-p.start, pushUp=pEnd-dragStart;
-          if(pushDown<=pushUp){ p.start=dragEnd; }
-          else { p.start=dragStart-p.duration; }
-        }
-      });
-      // cascade: after pushing, blocks may overlap each other; resolve by re-sorting and stacking
-      const sorted=BLOCKS.filter(bb=>bb!==dragB).sort((a,b)=>pos[a].start-pos[b].start);
-      for(let i=1;i<sorted.length;i++){
-        const prev=sorted[i-1], cur=sorted[i];
-        const prevEnd=pos[prev].start+pos[prev].duration;
-        if(pos[cur].start<prevEnd) pos[cur].start=prevEnd;
+      const others=BLOCKS.filter(bb=>bb!==dragB);
+      const above=others.filter(bb=>pos[bb].start+pos[bb].duration/2<dragMid).sort((a,b)=>pos[a].start-pos[b].start);
+      const below=others.filter(bb=>pos[bb].start+pos[bb].duration/2>=dragMid).sort((a,b)=>pos[a].start-pos[b].start);
+      let ceiling=dragStart;
+      for(let i=above.length-1;i>=0;i--){ const p=pos[above[i]]; if(p.start+p.duration>ceiling) p.start=ceiling-p.duration; ceiling=p.start; }
+      let floor=dragEnd;
+      for(let i=0;i<below.length;i++){ const p=pos[below[i]]; if(p.start<floor) p.start=floor; floor=p.start+p.duration; }
+      BLOCKS.forEach(bb=>{ pos[bb].start=Math.max(DAY_START,Math.min(DAY_END-pos[bb].duration,pos[bb].start)); });
+      const sorted=others.slice().sort((a,b)=>pos[a].start-pos[b].start);
+      for(let i=0;i<sorted.length;i++){
+        const bb=sorted[i], p=pos[bb];
+        if(p.start<dragEnd&&p.start+p.duration>dragStart) p.start=p.start<dragStart?dragStart-p.duration:dragEnd;
+        p.start=Math.max(DAY_START,Math.min(DAY_END-p.duration,p.start));
+        if(i>0){ const prev=sorted[i-1],prevEnd=pos[prev].start+pos[prev].duration; if(p.start<prevEnd) p.start=prevEnd; }
       }
-      // clamp all to timeline range
-      BLOCKS.forEach(bb=>{ pos[bb].start=Math.max(DAY_START, Math.min(DAY_END-pos[bb].duration, pos[bb].start)); });
-      // visually update all non-drag block elements
       others.forEach(bb=>{
         const el=allEls[bb]; if(!el) return;
         el.style.top=((pos[bb].start-DAY_START)*ppm)+"px";
         el.style.height=Math.max(pos[bb].duration*ppm,6)+"px";
         const tt=el.querySelector(".tl-time"); if(tt) tt.textContent=fmtT(pos[bb].start);
       });
-      return pos;
+      return {start:dragStart,dur:dragDur};
     }
 
     function down(e){
@@ -1666,7 +1696,7 @@ const BrewStore = (function () {
       const zone = offY<hz ? "top" : (offY>hgt-hz ? "bottom" : "move");
       try{ el.setPointerCapture(e.pointerId); }catch(_){}
       const rect=tl.getBoundingClientRect(), grab=e.clientY-r0.top;
-      let moved=false, finalPos=null;
+      let moved=false, lastStart=slot0.start, lastDur=slot0.duration;
       function move(ev){
         moved=true;
         const y=Math.max(0, Math.min(H, ev.clientY-rect.top));
@@ -1677,10 +1707,11 @@ const BrewStore = (function () {
         el.style.top=((start-DAY_START)*ppm)+"px";
         el.style.height=Math.max(dur*ppm,6)+"px";
         const tt=el.querySelector(".tl-time"); if(tt) tt.textContent=fmtT(start);
-        finalPos=pushBlocks(b, start, dur);
+        livePreview(b, start, dur);
+        lastStart=start; lastDur=dur;
       }
       function up(){ el.removeEventListener("pointermove",move); el.removeEventListener("pointerup",up);
-        if(moved && finalPos){ histRecord(); BLOCKS.forEach(bb=>S.setBlockSlot(wk,bb,finalPos[bb])); buzz(12); renderPlan(); } }
+        if(moved){ histRecord(); S.setBlockTime(wk,b,lastStart,lastDur); buzz(12); renderPlan(); } }
       el.addEventListener("pointermove",move); el.addEventListener("pointerup",up); e.preventDefault();
     }
   }
