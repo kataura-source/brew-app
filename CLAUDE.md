@@ -12,16 +12,16 @@ A gamified morning-routine habit tracker with a café/coffee theme. Completing a
 **Streak rule:** 3 full brews (all 4 blocks completed) in a calendar week.
 
 **Target users:** Muslim women building intentional morning routines.
-**Vision:** Web prototype first (`brew.html`), then native iOS app (SwiftUI, EventKit, camera, haptics).
+**Vision:** Web prototype first (`index.html`), then native iOS app (SwiftUI, EventKit, camera, haptics).
 
 ---
 
 ## Technical Overview
 
 ### Critical constraint
-**Single self-contained file: `brew.html`.** No external `.js` or `.css` files. Everything inlined. Reason: `file://` URLs and in-app preview panels don't load external resources. Do not split until the native iOS port.
+**Single self-contained file: `index.html`.** No external `.js` or `.css` files. Everything inlined. Reason: `file://` URLs and in-app preview panels don't load external resources. Do not split until the native iOS port.
 
-### File structure (inside brew.html)
+### File structure (inside index.html)
 1. `<script>` block 1 — **BrewStore IIFE** — entire data layer, settings, migrations
 2. `<script>` block 2 — **Daily Grind** — pixel cup, block ticking, celebration, day navigation
 3. `<script>` block 3 — **Planner / Calendar / Progress / Settings / Nav**
@@ -36,7 +36,7 @@ const localStorage={_d:{},getItem(k){return this._d[k]??null},setItem(k,v){this.
 const setTimeout=()=>{};
 const requestAnimationFrame=()=>{};
 ```
-After edits: `open "brew.html"` and Cmd+R in browser. Preview panel is render-only (no taps).
+After edits: `open "index.html"` and Cmd+R in browser. Preview panel is render-only (no taps).
 
 ### localStorage keys
 | Key | Content |
@@ -77,7 +77,7 @@ Store `brew-photos`, object store `photos` keyed by `{date, block, id}`. Blob ph
 - 7-cycle deterministic mug sticker rotations on completed brew days
 
 ### Coding conventions
-- No external dependencies — everything inline in `brew.html`
+- No external dependencies — everything inline in `index.html`
 - BrewStore IIFE exposes `window.BrewStore` (aliased `S`) as the sole data API
 - Settings use a draft/override pattern: `setSettingsOverride()` for preview, `clearSettingsOverride()` to discard, `applyChanges()` to persist
 - Block chaining: only B is sunrise-relative (offset); R/E/W chain from previous block's end (gap)
@@ -166,10 +166,10 @@ S.saveRoutineFromWeek(wk, mode)  // "sunrise" or "fixed"
 - **Mug shop** — spend beans to unlock different pixel-art mugs to display on Daily Grind
 
 ### iOS App (next major milestone)
-- The web prototype (`brew.html`) is feature-complete enough to start the iOS port
+- The web prototype (`index.html`) is feature-complete enough to start the iOS port
 - Stack: SwiftUI, EventKit (calendar export), camera (photo stamps), haptics
 - The web app serves as the full design/logic spec for the native build
-- Do NOT split brew.html into separate files until the iOS port begins
+- Do NOT split index.html into separate files until the iOS port begins
 
 ### Not yet built (web)
 - Photo capture / stamps (IndexedDB store ready, UI not built)
