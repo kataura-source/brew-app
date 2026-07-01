@@ -1282,7 +1282,7 @@ const BrewStore = (function () {
       } else {
         lines=""; allItems.forEach(it=>{ const on=S.isItemDone(T,b,it.id);
           const dim=it.ghost&&!on?` style="opacity:.5"`:"";;
-          lines+=`<button class="g-line ${on?"on":""}" data-b="${b}" data-id="${it.id}"${dim}><span class="gl-name">${S.itemLabel(b,it.id,it.label||null)}</span><span class="gl-lead"></span><span class="ring sm ${on?"stamped":""}"></span></button>`; });
+          lines+=`<button class="g-line ${on?"on":""}" data-b="${b}" data-id="${it.id}"${dim}><span class="gl-name">${escH(S.itemLabel(b,it.id,it.label||null))}</span><span class="gl-lead"></span><span class="ring sm ${on?"stamped":""}"></span></button>`; });
       }
       const headExtra = empty ? '<span class="caret" style="opacity:.5;transform:none">›</span>'
                               : `<button class="g-edit" data-action="editblock" data-b="${b}" aria-label="Edit ${WORD[b]} in the planner">✎</button>`;
@@ -1510,7 +1510,7 @@ const BrewStore = (function () {
       let lines="";
       if(blk.items.length){
         blk.items.forEach(it=>{ lines+=`<div class="slip-line">
-          <span class="sl-name">${S.itemLabel(b,it.id,it.label)}</span><span class="sl-leader"></span>
+          <span class="sl-name">${escS(S.itemLabel(b,it.id,it.label))}</span><span class="sl-leader"></span>
           <button class="sl-count" data-action="count" data-b="${b}" data-id="${it.id}">${countLabel(it.target)}</button>
           <button class="sl-x" data-action="remove" data-b="${b}" data-id="${it.id}">✕</button></div>`; });
       } else lines=`<div class="slip-empty">— no items · focus block —</div>`;
@@ -1955,7 +1955,7 @@ const BrewStore = (function () {
       let legend="", bDone=0, bTarget=0;
       const cols=items.map(()=>ITEM_COLORS[ci++ % ITEM_COLORS.length]);
       items.forEach((it,idx)=>{
-        legend+=`<div class="leg"><span class="leg-dot" style="background:${cols[idx]}"></span><span class="leg-name">${it.label}</span><span class="leg-ct">${it.done}/${it.target}</span></div>`;
+        legend+=`<div class="leg"><span class="leg-dot" style="background:${cols[idx]}"></span><span class="leg-name">${escS(it.label)}</span><span class="leg-ct">${it.done}/${it.target}</span></div>`;
         bDone+=Math.min(it.done,it.target); bTarget+=it.target;
       });
       const rings = items.length ? concentricSVG(items, cols) : `<div class="goal-empty">no items yet</div>`;
@@ -1971,7 +1971,7 @@ const BrewStore = (function () {
     const pagePct=totTarget?Math.round(totDone/totTarget*100):0;
     const log=S.getActiveLog(S.dateKey());
     let feed="";
-    if(log.length) log.forEach(e=>{ feed+=`<div class="tb-row"><span class="tb-time">${logTime(e.ts)}</span><span class="tb-item">${e.label}</span><span class="lchip bk-${e.b}">${e.b}</span></div>`; });
+    if(log.length) log.forEach(e=>{ feed+=`<div class="tb-row"><span class="tb-time">${logTime(e.ts)}</span><span class="tb-item">${escS(e.label)}</span><span class="lchip bk-${e.b}">${e.b}</span></div>`; });
     else feed=`<div class="tb-empty">Nothing brewed yet today — tick an item on the Daily Grind.</div>`;
 
     goalsRoot.innerHTML=`
@@ -2014,9 +2014,9 @@ const BrewStore = (function () {
     if(log.length){
       log.forEach(e=>{
         if(e.removed){
-          lines+=`<div class="slip-line lb-removed"><span class="sl-name">${logTime(e.ts)}</span><span class="sl-leader"></span><span class="lg-item">${e.label}</span><span class="lchip bk-${e.b}">${e.b}</span><button class="lb-x" data-action="log-remove" data-dk="${dk}" data-b="${e.b}" data-id="${e.id}" title="Remove from log">✕</button></div>`;
+          lines+=`<div class="slip-line lb-removed"><span class="sl-name">${logTime(e.ts)}</span><span class="sl-leader"></span><span class="lg-item">${escS(e.label)}</span><span class="lchip bk-${e.b}">${e.b}</span><button class="lb-x" data-action="log-remove" data-dk="${dk}" data-b="${e.b}" data-id="${e.id}" title="Remove from log">✕</button></div>`;
         } else {
-          lines+=`<div class="slip-line"><span class="sl-name">${logTime(e.ts)}</span><span class="sl-leader"></span><span class="lg-item">${e.label}</span><span class="lchip bk-${e.b}">${e.b}</span></div>`;
+          lines+=`<div class="slip-line"><span class="sl-name">${logTime(e.ts)}</span><span class="sl-leader"></span><span class="lg-item">${escS(e.label)}</span><span class="lchip bk-${e.b}">${e.b}</span></div>`;
         }
       });
     } else lines=`<div class="slip-empty">— nothing brewed this day —</div>`;
