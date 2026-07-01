@@ -339,6 +339,9 @@
   .tl-grip.top { top:0; } .tl-grip.bottom { bottom:0; }
   .tl-grip::before { content:""; width:22px; height:3px; border-radius:2px; background:rgba(255,255,255,.6); }
   .locked .tl-grip { display:none; }
+  .tl-mode { position:absolute; top:2px; right:4px; background:none; border:none; font-size:11px;
+    cursor:pointer; opacity:.7; touch-action:manipulation; z-index:3; padding:2px; line-height:1; }
+  .tl-mode:active { opacity:1; }
 
   /* ---------- goals: café loyalty stamp cards ---------- */
   .loyalty { background:#faf4e6; border:1px solid #e7d9bd; border-radius:11px; padding:11px 13px; margin-top:10px;
@@ -609,14 +612,15 @@
     font-weight:800; color:var(--caramel-deep); background:var(--foam); padding:1px 3px; border-radius:4px; }
 
   /* ---------- log modal: removed (unticked) items ---------- */
-  .lb-removed { opacity:.42; text-decoration:line-through; font-style:italic; }
+  .lb-removed { opacity:.42; font-style:italic; }
   .lb-x { background:none; border:none; color:#bf9a78; font-size:12px; cursor:pointer; padding:1px 4px; touch-action:manipulation; flex-shrink:0; }
   .lb-clear { display:block; width:100%; margin-top:8px; font-size:11.5px; color:var(--caramel-deep);
     background:none; border:none; cursor:pointer; font-family:var(--font); font-weight:700;
     text-decoration:underline; touch-action:manipulation; opacity:.7; text-align:center; }
-  .lg-grind-btn { display:block; width:100%; margin-top:8px; background:var(--foam); border:1px solid var(--line);
-    border-radius:10px; padding:9px; font-family:var(--font); font-weight:700; font-size:13px;
+  .lg-grind-btn { background:var(--foam); border:1px solid var(--line);
+    border-radius:20px; padding:4px 12px; font-family:var(--font); font-weight:700; font-size:12px;
     color:var(--caramel-deep); cursor:pointer; touch-action:manipulation; }
+  .lg-nav-row { display:flex; align-items:center; justify-content:center; gap:8px; margin:6px 0 0; }
 
   /* ---------- settings sticky top bar ---------- */
   .set-top { position:sticky; top:0; z-index:20; background:rgba(246,236,221,.94);
@@ -933,7 +937,9 @@ const BrewStore = (function () {
     let prevEnd=null;
     for(const b of BLOCKS){
       const slot=plan.blocks[b].slot, start=slot.start, dur=slot.duration;
-      if(mode==="fixed"){
+      const curConfig=blockConfig(b);
+      const useFixed = mode==="fixed" || (mode==="mixed" && curConfig.fixed!=null);
+      if(useFixed){
         s.blocks[b]={ duration:dur, fixed:Math.max(0,Math.min(1425,Math.round(start/5)*5)) };
       } else {
         if(b==="B") s.blocks[b]={ duration:dur, offset:Math.max(-360,Math.min(480,start-sr)), fixed:null };
@@ -942,7 +948,7 @@ const BrewStore = (function () {
       prevEnd=start+dur;
     }
     saveSettings(s);
-    applyRoutineToFutureWeeks(wk);   // future uncommitted drafts pick up the new default times; committed/past untouched
+    applyRoutineToFutureWeeks(wk);
     return mode;
   }
   function applyRoutineToFutureWeeks(fromWk){
@@ -1446,7 +1452,9 @@ const BrewStore = (function () {
         nowLine=`<div class="tl-now" style="top:${nTop}px"><div class="tl-now-line"></div><div class="tl-now-pill">${fmtT(nowMin)}</div></div>`; } }
     let tl="";
     BLOCKS.forEach(b=>{ const s=plan.blocks[b].slot; const top=(s.start-DAY_START)*ppm, hgt=Math.max(s.duration*ppm,6);
-      tl+=`<div class="tl-block bk-${b}" data-b="${b}" style="top:${top}px;height:${hgt}px"><div class="tl-grip top"></div><span class="tl-let">${b}</span><span class="tl-nm">${WORD[b]}</span><span class="tl-time">${fmtT(s.start)}</span><div class="tl-grip bottom"></div></div>`; });
+      const bc=S.blockConfig(b); const isFixed=bc.fixed!=null;
+      const modeBtn=locked?"":` <button class="tl-mode" data-action="tl-toggle-mode" data-b="${b}" title="${isFixed?"Switch to sunrise-relative":"Pin to fixed time"}">${isFixed?"📌":"☀️"}</button>`;
+      tl+=`<div class="tl-block bk-${b}" data-b="${b}" style="top:${top}px;height:${hgt}px"><div class="tl-grip top"></div><span class="tl-let">${b}</span><span class="tl-nm">${WORD[b]}</span><span class="tl-time">${fmtT(s.start)}</span>${modeBtn}<div class="tl-grip bottom"></div></div>`; });
     const timeline=`<div class="timeline-wrap"><div class="timeline" id="timeline" style="height:${H}px">${hours}${sun}${nowLine}${tl}</div><button class="tl-info" data-action="planinfo" aria-label="About this schedule">!</button></div>`;
 
     // order slips
@@ -1508,12 +1516,19 @@ const BrewStore = (function () {
     // save-as-default — quiet, collapsed behind a single tap (it's a setting, not a daily action)
     const routineBar=routineOpen
       ? `<div class="routinesave open">
-          <button class="rs-toggle" data-action="routine-toggle">Save as default schedule<span class="rs-caret">▴</span></button>
+          <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+            <button class="rs-toggle" data-action="routine-toggle">Save as default schedule<span class="rs-caret">▴</span></button>
+            <button class="tl-info" data-action="routine-info" aria-label="About sunrise vs fixed" style="width:20px;height:20px;font-size:12px;flex-shrink:0">?</button>
+          </div>
           <div class="rs-btns">
-            <button class="rsbtn" data-action="save-sunrise"><b>☀ Sunrise-relative</b><small>shifts with the seasons</small></button>
-            <button class="rsbtn" data-action="save-fixed"><b>🕒 Fixed times</b><small>same clock all year</small></button>
+            <button class="rsbtn" data-action="save-sunrise"><b>☀ Sunrise</b><small>shifts with seasons</small></button>
+            <button class="rsbtn" data-action="save-mixed"><b>🔀 Mixed</b><small>keep each as-is</small></button>
+            <button class="rsbtn" data-action="save-fixed"><b>📌 Fixed</b><small>same clock all year</small></button>
           </div></div>`
-      : `<div class="routinesave"><button class="rs-toggle" data-action="routine-toggle">Save as default schedule<span class="rs-caret">▾</span></button></div>`;
+      : `<div class="routinesave"><div style="display:flex;align-items:center;justify-content:center;gap:6px">
+            <button class="rs-toggle" data-action="routine-toggle">Save as default schedule<span class="rs-caret">▾</span></button>
+            <button class="tl-info" data-action="routine-info" aria-label="About sunrise vs fixed" style="width:20px;height:20px;font-size:12px;flex-shrink:0">?</button>
+          </div></div>`;
 
     planRoot.className=locked?"locked":"";
     planRoot.innerHTML=`
@@ -1563,11 +1578,27 @@ const BrewStore = (function () {
     else if(act==="wk+"){ weekOffset++; openSlip=null; renderPlan(); }
     else if(act==="wk-now"){ weekOffset=0; openSlip=null; renderPlan(); }
     else if(act==="planinfo"){ planNoteModal.classList.add("on"); }
+    else if(act==="tl-toggle-mode"){
+      const sr=S.weekSunriseMin(wk), bc=S.blockConfig(b), s=S.getSavedSettings();
+      if(!s.blocks) s.blocks={};
+      const cur=S.blockStart(b,sr);
+      if(bc.fixed!=null){ // switch to sunrise-relative
+        if(b==="B") s.blocks[b]={duration:bc.duration, offset:cur-sr, fixed:null};
+        else { const prev=BLOCKS[BLOCKS.indexOf(b)-1]; const prevEnd=S.blockStart(prev,sr)+S.blockConfig(prev).duration; s.blocks[b]={duration:bc.duration, gap:Math.max(0,cur-prevEnd), fixed:null}; }
+      } else { // switch to fixed
+        s.blocks[b]={duration:bc.duration, fixed:Math.max(0,Math.min(1425,Math.round(cur/5)*5))};
+      }
+      S.saveSettings(s); S.applyDefaultsToDrafts(); buzz(10); renderPlan();
+      showToast(bc.fixed!=null?`${WORD[b]} now follows sunrise ☀️`:`${WORD[b]} pinned to ${fmtT(cur)} 📌`);
+    }
     else if(act==="routine-toggle"){ routineOpen=!routineOpen; renderPlan(); }
     else if(act==="save-sunrise"){ S.saveRoutineFromWeek(wk,"sunrise"); buzz(18); routineOpen=false; renderPlan();
       showToast("Default schedule updated — future weeks use these times (☀ sunrise-relative)."); }
+    else if(act==="save-mixed"){ S.saveRoutineFromWeek(wk,"mixed"); buzz(18); routineOpen=false; renderPlan();
+      showToast("Default schedule updated — each block keeps its current ☀/📌 mode."); }
     else if(act==="save-fixed"){ S.saveRoutineFromWeek(wk,"fixed"); buzz(18); routineOpen=false; renderPlan();
-      showToast("Default schedule updated — future weeks use these times (🕒 fixed clock times)."); }
+      showToast("Default schedule updated — future weeks use these times (📌 fixed clock times)."); }
+    else if(act==="routine-info"){ alert("☀ Sunrise-relative: block times shift with the seasons, aligning to your natural circadian rhythm. Great for blocks like Barakah that depend on Fajr.\n\n📌 Fixed: block times stay the same all year, regardless of sunrise. Good for blocks tied to work or school schedules.\n\n🔀 Mixed: keeps each block's current setting — use this when some blocks follow sunrise and others are pinned.\n\nSunrise-relative is recommended for most users — it adapts to seasonal changes and supports a healthier sleep-wake cycle."); }
   }
 
   planRoot.addEventListener("click", e=>{
@@ -1585,32 +1616,71 @@ const BrewStore = (function () {
   });
 
   // timeline: drag body to MOVE, drag top/bottom edge to RESIZE (pointer events => touch-friendly)
+  // Collision detection: displaced blocks push above/below during drag, return when clear.
   function attachDrag(ppm,H,wk){
     const tl=document.getElementById("timeline"); if(!tl) return;
-    const MIN=15, snap=m=>Math.round(m/15)*15;
-    tl.querySelectorAll(".tl-block").forEach(el=> el.addEventListener("pointerdown", down));
+    const MIN=5, snap1=m=>Math.round(m);   // 1-min precision on drag
+    const allEls={}; tl.querySelectorAll(".tl-block").forEach(el=>{ allEls[el.dataset.b]=el; el.addEventListener("pointerdown", down); });
+    // snapshot original positions for all blocks so displaced ones can return
+    const orig={}; BLOCKS.forEach(bb=>{ const sl=S.getPlan(wk).blocks[bb].slot; orig[bb]={start:sl.start,duration:sl.duration}; });
+
+    function pushBlocks(dragB, dragStart, dragDur){
+      // resolve collisions: push other blocks out of the way, preserving their durations
+      const dragEnd=dragStart+dragDur;
+      const pos={}; BLOCKS.forEach(bb=>{ pos[bb]=bb===dragB?{start:dragStart,duration:dragDur}:{start:orig[bb].start,duration:orig[bb].duration}; });
+      // sort non-drag blocks by original start
+      const others=BLOCKS.filter(bb=>bb!==dragB).sort((a,b)=>orig[a].start-orig[b].start);
+      others.forEach(bb=>{
+        const p=pos[bb], pEnd=p.start+p.duration;
+        // if this block overlaps the dragged block, push it
+        if(p.start<dragEnd && pEnd>dragStart){
+          // push in the direction of least displacement
+          const pushDown=dragEnd-p.start, pushUp=pEnd-dragStart;
+          if(pushDown<=pushUp){ p.start=dragEnd; }
+          else { p.start=dragStart-p.duration; }
+        }
+      });
+      // cascade: after pushing, blocks may overlap each other; resolve by re-sorting and stacking
+      const sorted=BLOCKS.filter(bb=>bb!==dragB).sort((a,b)=>pos[a].start-pos[b].start);
+      for(let i=1;i<sorted.length;i++){
+        const prev=sorted[i-1], cur=sorted[i];
+        const prevEnd=pos[prev].start+pos[prev].duration;
+        if(pos[cur].start<prevEnd) pos[cur].start=prevEnd;
+      }
+      // clamp all to timeline range
+      BLOCKS.forEach(bb=>{ pos[bb].start=Math.max(DAY_START, Math.min(DAY_END-pos[bb].duration, pos[bb].start)); });
+      // visually update all non-drag block elements
+      others.forEach(bb=>{
+        const el=allEls[bb]; if(!el) return;
+        el.style.top=((pos[bb].start-DAY_START)*ppm)+"px";
+        el.style.height=Math.max(pos[bb].duration*ppm,6)+"px";
+        const tt=el.querySelector(".tl-time"); if(tt) tt.textContent=fmtT(pos[bb].start);
+      });
+      return pos;
+    }
+
     function down(e){
       const el=e.currentTarget, b=el.dataset.b, slot0=S.getPlan(wk).blocks[b].slot, end0=slot0.start+slot0.duration;
       const r0=el.getBoundingClientRect(), offY=e.clientY-r0.top, hgt=el.offsetHeight;
-      const hz=Math.min(13, hgt*0.34);                                  // edge zone height (touch-sized)
+      const hz=Math.min(13, hgt*0.34);
       const zone = offY<hz ? "top" : (offY>hgt-hz ? "bottom" : "move");
       try{ el.setPointerCapture(e.pointerId); }catch(_){}
       const rect=tl.getBoundingClientRect(), grab=e.clientY-r0.top;
-      let moved=false, pend=null;
+      let moved=false, finalPos=null;
       function move(ev){
         moved=true;
         const y=Math.max(0, Math.min(H, ev.clientY-rect.top));
         let start, dur;
-        if(zone==="move"){ const top=Math.max(0, Math.min(H-hgt, ev.clientY-rect.top-grab)); start=clampStart(top/ppm+DAY_START, slot0.duration); dur=slot0.duration; }
-        else if(zone==="top"){ let s=snap(y/ppm+DAY_START); s=Math.max(DAY_START, Math.min(s, end0-MIN)); start=s; dur=end0-s; }       // move start, keep end
-        else { let en=snap(y/ppm+DAY_START); en=Math.min(DAY_END, Math.max(en, slot0.start+MIN)); start=slot0.start; dur=en-start; }   // move end, keep start
-        pend={start,duration:dur};
+        if(zone==="move"){ const top=Math.max(0, Math.min(H-hgt, ev.clientY-rect.top-grab)); start=Math.max(DAY_START, Math.min(DAY_END-slot0.duration, snap1(top/ppm+DAY_START))); dur=slot0.duration; }
+        else if(zone==="top"){ let s=snap1(y/ppm+DAY_START); s=Math.max(DAY_START, Math.min(s, end0-MIN)); start=s; dur=end0-s; }
+        else { let en=snap1(y/ppm+DAY_START); en=Math.min(DAY_END, Math.max(en, slot0.start+MIN)); start=slot0.start; dur=en-start; }
         el.style.top=((start-DAY_START)*ppm)+"px";
         el.style.height=Math.max(dur*ppm,6)+"px";
         const tt=el.querySelector(".tl-time"); if(tt) tt.textContent=fmtT(start);
+        finalPos=pushBlocks(b, start, dur);
       }
       function up(){ el.removeEventListener("pointermove",move); el.removeEventListener("pointerup",up);
-        if(moved && pend){ histRecord(); S.setBlockSlot(wk,b,pend); buzz(12); renderPlan(); } }
+        if(moved && finalPos){ histRecord(); BLOCKS.forEach(bb=>S.setBlockSlot(wk,bb,finalPos[bb])); buzz(12); renderPlan(); } }
       el.addEventListener("pointermove",move); el.addEventListener("pointerup",up); e.preventDefault();
     }
   }
@@ -1622,17 +1692,22 @@ const BrewStore = (function () {
     const dtL=d=>d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+"T"+p2(d.getHours())+p2(d.getMinutes())+"00";
     const dtU=d=>d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate())+"T"+p2(d.getUTCHours())+p2(d.getUTCMinutes())+p2(d.getUTCSeconds())+"Z";
     const esc=s=>String(s).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+    const tz=(Intl.DateTimeFormat().resolvedOptions().timeZone)||"UTC";
     const base=S.parseKey(wk), now=new Date(), stamp=dtU(now);
-    const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//BREW//Order Ahead//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:BREW"];
-    BLOCKS.forEach(b=>{ const blk=plan.blocks[b];
-      const s=new Date(base); s.setHours(Math.floor(blk.slot.start/60), blk.slot.start%60, 0, 0);
-      const e=new Date(s.getTime()+(blk.slot.duration||30)*60000);
-      const items=blk.items.map(it=>S.itemLabel(b,it.id,it.label)+" ("+it.target+"×/wk)").join(", ");
-      L.push("BEGIN:VEVENT","UID:brew-"+wk+"-"+b+"@brew.app","DTSTAMP:"+stamp,"DTSTART:"+dtL(s),"DTEND:"+dtL(e),
-        "RRULE:FREQ=DAILY;COUNT=7","SUMMARY:"+esc("☕️ "+EXPORT_NAME[b]),
-        "DESCRIPTION:"+esc(items || ("Focus block — "+durLabel(blk.slot.duration))),
-        "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+esc(WORD[b]+" in 10 min"),"TRIGGER:-PT10M","END:VALARM","END:VEVENT");
-    });
+    const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//BREW//Order Ahead//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:BREW","X-WR-TIMEZONE:"+tz];
+    for(let day=0; day<7; day++){
+      const dayDate=new Date(base); dayDate.setDate(base.getDate()+day);
+      BLOCKS.forEach(b=>{ const blk=plan.blocks[b];
+        const s=new Date(dayDate); s.setHours(Math.floor(blk.slot.start/60), blk.slot.start%60, 0, 0);
+        const e=new Date(s.getTime()+(blk.slot.duration||30)*60000);
+        const items=blk.items.map(it=>S.itemLabel(b,it.id,it.label)).join(", ");
+        L.push("BEGIN:VEVENT","UID:brew-"+wk+"-"+b+"-d"+day+"@brew.app","DTSTAMP:"+stamp,
+          "DTSTART;TZID="+tz+":"+dtL(s),"DTEND;TZID="+tz+":"+dtL(e),
+          "SUMMARY:"+esc(EXPORT_NAME[b]),
+          "DESCRIPTION:"+esc(items || ("Focus block — "+durLabel(blk.slot.duration))),
+          "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+esc(WORD[b]+" in 10 min"),"TRIGGER:-PT10M","END:VALARM","END:VEVENT");
+      });
+    }
     L.push("END:VCALENDAR");
     const content=L.join("\r\n");
     try{
@@ -1640,11 +1715,10 @@ const BrewStore = (function () {
       const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="brew-"+wk+".ics";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
     } catch(_){
-      // fallback for environments where blob URLs are blocked (some iOS webviews)
       const a=document.createElement("a"); a.href="data:text/calendar;charset=utf-8,"+encodeURIComponent(content);
       a.download="brew-"+wk+".ics"; document.body.appendChild(a); a.click(); a.remove();
     }
-    showToast("📆 Calendar file ready — open it to import into Apple Calendar.");
+    showToast("📆 Calendar file exported — open it to import.");
   }
 
   /* ========================= GOOGLE CALENDAR EXPORT ========================= */
@@ -1904,12 +1978,11 @@ const BrewStore = (function () {
         <div class="lg-head"><button class="calnav sm" data-action="logprev">‹</button>
           <div class="lg-date"><b>${isToday?"Today":dateLabel}</b><span>${dateLabel} · ${hij}</span></div>
           <button class="calnav sm" data-action="lognext" ${isFuture?"disabled":""}>›</button></div>
-        ${!isToday?`<button class="today-pill" data-action="logtoday" style="margin:4px auto 0;display:block;">Today</button>`:""}
+        <div class="lg-nav-row">${!isToday?`<button class="today-pill" data-action="logtoday">↩ Today</button>`:""}<button class="lg-grind-btn" data-action="viewingrind" data-dk="${dk}">☕️ View in Daily Grind</button></div>
         <div class="slip-tear"></div>
         <div class="slip-lines">${lines}</div>
         ${hasRemoved?`<button class="lb-clear" data-action="log-clear" data-dk="${dk}">Clear removed</button>`:""}
         <div class="slip-foot"><span>BREW LOG</span><span>${activeCount} item${activeCount===1?"":"s"}</span></div>
-        <button class="lg-grind-btn" data-action="viewingrind" data-dk="${dk}">☕️ View in Daily Grind</button>
         <button class="lg-close" data-action="closelog">close</button>
       </div>`;
     logModal.classList.add("on");
