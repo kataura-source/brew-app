@@ -602,6 +602,33 @@
     font-weight:800; font-size:17px; cursor:pointer; font-family:var(--font); touch-action:manipulation; }
   .set-step-ctrl button:active { background:var(--caramel); color:#fff; }
 
+  /* ---------- current-time indicator on planner timeline ---------- */
+  .tl-now { position:absolute; left:0; right:0; pointer-events:none; z-index:4; }
+  .tl-now-line { position:absolute; left:0; right:0; border-top:2px solid rgba(185,130,75,.6); }
+  .tl-now-pill { position:absolute; left:-44px; top:-8px; width:38px; text-align:right; font-size:8px;
+    font-weight:800; color:var(--caramel-deep); background:var(--foam); padding:1px 3px; border-radius:4px; }
+
+  /* ---------- log modal: removed (unticked) items ---------- */
+  .lb-removed { opacity:.42; text-decoration:line-through; font-style:italic; }
+  .lb-x { background:none; border:none; color:#bf9a78; font-size:12px; cursor:pointer; padding:1px 4px; touch-action:manipulation; flex-shrink:0; }
+  .lb-clear { display:block; width:100%; margin-top:8px; font-size:11.5px; color:var(--caramel-deep);
+    background:none; border:none; cursor:pointer; font-family:var(--font); font-weight:700;
+    text-decoration:underline; touch-action:manipulation; opacity:.7; text-align:center; }
+  .lg-grind-btn { display:block; width:100%; margin-top:8px; background:var(--foam); border:1px solid var(--line);
+    border-radius:10px; padding:9px; font-family:var(--font); font-weight:700; font-size:13px;
+    color:var(--caramel-deep); cursor:pointer; touch-action:manipulation; }
+
+  /* ---------- settings sticky top bar ---------- */
+  .set-top { position:sticky; top:0; z-index:20; background:rgba(246,236,221,.94);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); padding:10px 0 8px; margin-bottom:6px; }
+
+  /* ---------- danger zone ---------- */
+  .set-danger { background:#fff5f5; border:1px solid #e8c0c0; border-radius:13px; padding:12px 13px; margin-top:10px; }
+  .set-danger-hint { font-size:11.5px; color:#8b3a3a; opacity:.8; line-height:1.4; margin-bottom:10px; }
+  .set-danger-btn { width:100%; background:#c0392b; color:#fff; border:none; border-radius:12px; padding:13px;
+    font-family:var(--font); font-weight:800; font-size:14px; cursor:pointer; touch-action:manipulation; }
+  .set-danger-btn:active { opacity:.82; }
+
   /* ---------- settings: activities menu editor ---------- */
   .mnu-list { display:flex; flex-direction:column; gap:6px; }
   .mnu-item { display:flex; align-items:center; gap:9px; background:#fff; border:1px solid var(--line);
@@ -646,7 +673,7 @@
       </div>
 
       <div id="grindRoot"></div>
-      <button class="reset" id="reset">empty the cup (demo reset)</button>
+      <button class="reset" id="reset">empty the cup</button>
     </section>
 
     <!-- ===================== ORDER AHEAD (planner) ===================== -->
@@ -932,15 +959,18 @@ const BrewStore = (function () {
     const day=getDay(date); const arr=day[b]; const i=arr.indexOf(id);
     let on; if(i>=0){ arr.splice(i,1); on=false; } else { arr.push(id); on=true; }
     setDay(date,day);
-    // daily log: stamp a timestamp on completion, drop it on un-tick
+    // daily log: stamp on tick; mark removed (not deleted) on un-tick so it stays visible in the log
     const log=lsGet(LS.log,{}); const d=log[date]||{}; const key=b+"|"+id;
     if(on){ const pi=getPlan(weekKey(parseKey(date))).blocks[b].items.find(x=>x.id===id);
-      d[key]={ ts:Date.now(), b, id, label: id==="done" ? "Focus block" : itemLabel(b,id,pi&&pi.label) }; }
-    else delete d[key];
+      d[key]={ ts:Date.now(), b, id, label: id==="done" ? "Focus block" : itemLabel(b,id,pi&&pi.label), removed:false }; }
+    else if(d[key]){ d[key]={ ...d[key], removed:true }; }
     log[date]=d; lsSet(LS.log,log);
     return on;
   }
   function getLog(date){ const d=lsGet(LS.log,{})[date]||{}; return Object.keys(d).map(k=>d[k]).sort((a,b)=>a.ts-b.ts); }
+  function getActiveLog(date){ return getLog(date).filter(e=>!e.removed); }
+  function clearRemovedLog(date){ const log=lsGet(LS.log,{}); const d=log[date]||{}; for(const k in d) if(d[k].removed) delete d[k]; log[date]=d; lsSet(LS.log,log); }
+  function removeLogEntry(date,b,id){ const log=lsGet(LS.log,{}); const d=log[date]||{}; delete d[b+"|"+id]; log[date]=d; lsSet(LS.log,log); }
   function setItemDone(date,b,id,on){ const day=getDay(date); const arr=day[b]; const has=arr.indexOf(id)>=0; if(on&&!has)arr.push(id); if(!on&&has)arr.splice(arr.indexOf(id),1); setDay(date,day); }
   function isItemDone(date,b,id){ return getDay(date)[b].indexOf(id)>=0; }
   function isBlockDone(date,b){ return getDay(date)[b].length>0; }
@@ -1050,7 +1080,7 @@ const BrewStore = (function () {
     getPlan, savePlan, defaultPlan, isCommitted, setBlockSlot, setItemTarget, addItem, removeItem, setBlockItems,
     commitWeek, plannedIds, repeatLastWeek, applyDefaultsToDrafts, saveRoutineFromWeek,
     getDay, setDay, toggleItem, setItemDone, isItemDone, isBlockDone, dayBrewCount, isFullBrew, setBlockDone,
-    goalProgress, weekFullBrewDays, weekStreakKept, getLog,
+    goalProgress, weekFullBrewDays, weekStreakKept, getLog, getActiveLog, clearRemovedLog, removeLogEntry,
     getDisplayBlock, setDisplayBlock, isBackfilled, markBackfilled,
     getNote, setNote, hasCelebrated, markCelebrated,
     putPhoto, getPhoto, getDayPhotos, getFeed, deletePhoto, deleteDayPhotos, clearPhotos,
@@ -1187,13 +1217,20 @@ const BrewStore = (function () {
     const plan=S.getPlan(wk), committed=S.isCommitted(wk);
     let slips="";
     ORDER.forEach(b=>{
-      const items=plan.blocks[b].items, done=S.isBlockDone(T,b), slot=plan.blocks[b].slot, empty=items.length===0;
+      const items=plan.blocks[b].items, slot=plan.blocks[b].slot;
+      // show ticked items even if removed from the plan (so they remain untickable from grind)
+      const planIds=new Set(items.map(x=>x.id));
+      const tickedIds=S.getDay(T)[b]||[];
+      const ghostItems=tickedIds.filter(id=>!planIds.has(id)).map(id=>({id,label:S.itemLabel(b,id,null),ghost:true}));
+      const allItems=[...items,...ghostItems];
+      const done=S.isBlockDone(T,b), empty=allItems.length===0;
       let lines;
       if(empty){
         lines=`<div class="g-empty">no items — tap to plan</div>`;
       } else {
-        lines=""; items.forEach(it=>{ const on=S.isItemDone(T,b,it.id);
-          lines+=`<button class="g-line ${on?"on":""}" data-b="${b}" data-id="${it.id}"><span class="gl-name">${S.itemLabel(b,it.id,it.label)}</span><span class="gl-lead"></span><span class="ring sm ${on?"stamped":""}"></span></button>`; });
+        lines=""; allItems.forEach(it=>{ const on=S.isItemDone(T,b,it.id);
+          const dim=it.ghost&&!on?` style="opacity:.5"`:"";;
+          lines+=`<button class="g-line ${on?"on":""}" data-b="${b}" data-id="${it.id}"${dim}><span class="gl-name">${S.itemLabel(b,it.id,it.label||null)}</span><span class="gl-lead"></span><span class="ring sm ${on?"stamped":""}"></span></button>`; });
       }
       const headExtra = empty ? '<span class="caret" style="opacity:.5;transform:none">›</span>'
                               : `<button class="g-edit" data-action="editblock" data-b="${b}" aria-label="Edit ${WORD[b]} in the planner">✎</button>`;
@@ -1231,6 +1268,7 @@ const BrewStore = (function () {
   }
   window.renderGrind=renderGrind;
   window.grindHome=function(){ dayOffset=0; editingDay=null; wasFull=false; renderGrind(); };   // tapping the Grind tab returns to today
+  window.grindGoToDay=function(dk){ const t=new Date(); t.setHours(0,0,0,0); const d=S.parseKey(dk); dayOffset=Math.round((d-t)/864e5); editingDay=null; wasFull=false; renderGrind(); };
 
   grindRoot.addEventListener("click", e=>{
     if(e.target.closest('[data-action="unlock-day"]')){ if(confirm("Log something you missed?")){ editingDay=viewKey(); renderGrind(); } return; }
@@ -1259,13 +1297,28 @@ const BrewStore = (function () {
     c.style.left=Math.random()*100+"vw"; c.style.background=COLORS[i%COLORS.length];
     const dur=2.2+Math.random()*1.6; c.style.animation=`fall ${dur}s ${Math.random()*0.6}s ease-in forwards`;
     c.style.transform=`rotate(${Math.random()*360}deg)`; document.body.appendChild(c); setTimeout(()=>c.remove(),(dur+1)*1000); } }
+  const STREAK_MSGS=[
+    "Another week, another brew. Keep going! ☕️",
+    "Consistency is the secret ingredient ✨",
+    "Three brews — your streak lives on! 🔥",
+    "Masha'Allah — your mornings are building ☕️",
+    "Look at you, showing up again 🌅",
+  ];
   function party(){
     celebrate.classList.add("on"); confettiBurst(); buzz([0,40,60,40,80,30,120]);
     const f=S.weekFullBrewDays(S.weekKey());
+    const streakN=window.currentStreakWeeks?window.currentStreakWeeks():1;
     const el=celebrate.querySelector(".cele-streak");
-    if(el) el.innerHTML = f>=3
-      ? `🔥 Streak kept — ${f} full brews this week`
-      : `☕️ ${f} full brew${f===1?"":"s"} this week · ${3-f} more keeps your streak`;
+    if(el){
+      if(f>=3){
+        const msg = streakN<=1
+          ? "You've started your streak! Keep it going next week ☕️"
+          : STREAK_MSGS[streakN % STREAK_MSGS.length];
+        el.innerHTML=`🔥 ${msg}`;
+      } else {
+        el.innerHTML=`☕️ ${f} full brew${f===1?"":"s"} this week · ${3-f} more keeps your streak`;
+      }
+    }
   }
   function ringPop(){ confettiBurst(24); buzz([0,30,40,30]); }   // small celebration when a goal ring closes
   window.ringPop=ringPop;
@@ -1325,7 +1378,7 @@ const BrewStore = (function () {
   function fmtT(min){ let h=Math.floor(min/60), m=min%60; const ap=h<12?"am":"pm"; let hh=h%12||12; return hh+":"+String(m).padStart(2,"0")+ap; }
   function durLabel(min){ const h=Math.floor(min/60), m=min%60; return (h?h+"h":"")+(h&&m?" ":"")+(m?m+"m":(h?"":"0m")); }
   function countLabel(t){ return t+"×"; }
-  function clampStart(min,dur){ dur=dur||30; return Math.max(DAY_START, Math.min(DAY_END-dur, Math.round(min/15)*15)); }
+  function clampStart(min,dur){ dur=dur||30; return Math.max(DAY_START, Math.min(DAY_END-dur, Math.round(min/5)*5)); }
   function curWk(){ return S.addWeeks(S.weekKey(), weekOffset); }
   function gd(d){ return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"}); }
   function weekLabel(wk){ const m=S.parseKey(wk); const e=new Date(m); e.setDate(m.getDate()+6); return gd(m)+" – "+gd(e); }
@@ -1333,8 +1386,10 @@ const BrewStore = (function () {
     return S.hijri(m,{day:"numeric"})+"–"+S.hijri(e,{day:"numeric",month:"long"})+" AH"; }
 
   /* ---------- nav ---------- */
+  let prevView="grind";
   function showView(name){
     if(name!=="settings" && draft){ discardDraft(); }   // leaving settings any other way drops unapplied edits
+    if(name!=="settings") prevView=name;   // remember where we came from so "Done" returns there
     document.querySelectorAll(".view").forEach(v=> v.classList.toggle("active", v.id==="view-"+name));
     document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===name));
     if(name==="plan") renderPlan();
@@ -1362,6 +1417,7 @@ const BrewStore = (function () {
   function currentStreakWeeks(){ const thisWk=S.weekKey(); let n=0;
     for(let i=1;i<=104;i++){ if(S.weekStreakKept(S.addWeeks(thisWk,-i))) n++; else break; }
     if(S.weekStreakKept(thisWk)) n++; return n; }
+  window.currentStreakWeeks=currentStreakWeeks;
   function updateStreakBadge(){ const n=currentStreakWeeks();
     const el=document.getElementById("streakNum"); if(el) el.textContent=n;
     const big=document.getElementById("streakBig"); if(big) big.textContent=Math.max(n,1); }
@@ -1384,10 +1440,14 @@ const BrewStore = (function () {
     let sun=""; if(sr>=DAY_START && sr<=DAY_END){ const sTop=(sr-DAY_START)*ppm;
       const srTxt=Math.floor(sr/60)+":"+String(sr%60).padStart(2,"0");
       sun=`<div class="tl-sun" style="top:${sTop}px"></div><div class="tl-sunlab" style="top:${sTop}px">☀ ${srTxt}</div>`; }
+    // current-time indicator (only shown when viewing the current week and now is in range)
+    let nowLine=""; if(isThis){ const nowD=new Date(), nowMin=nowD.getHours()*60+nowD.getMinutes();
+      if(nowMin>=DAY_START && nowMin<=DAY_END){ const nTop=(nowMin-DAY_START)*ppm;
+        nowLine=`<div class="tl-now" style="top:${nTop}px"><div class="tl-now-line"></div><div class="tl-now-pill">${fmtT(nowMin)}</div></div>`; } }
     let tl="";
     BLOCKS.forEach(b=>{ const s=plan.blocks[b].slot; const top=(s.start-DAY_START)*ppm, hgt=Math.max(s.duration*ppm,6);
       tl+=`<div class="tl-block bk-${b}" data-b="${b}" style="top:${top}px;height:${hgt}px"><div class="tl-grip top"></div><span class="tl-let">${b}</span><span class="tl-nm">${WORD[b]}</span><span class="tl-time">${fmtT(s.start)}</span><div class="tl-grip bottom"></div></div>`; });
-    const timeline=`<div class="timeline-wrap"><div class="timeline" id="timeline" style="height:${H}px">${hours}${sun}${tl}</div><button class="tl-info" data-action="planinfo" aria-label="About this schedule">!</button></div>`;
+    const timeline=`<div class="timeline-wrap"><div class="timeline" id="timeline" style="height:${H}px">${hours}${sun}${nowLine}${tl}</div><button class="tl-info" data-action="planinfo" aria-label="About this schedule">!</button></div>`;
 
     // order slips
     let slips="";
@@ -1440,9 +1500,10 @@ const BrewStore = (function () {
           <button class="urbtn" data-action="undo" ${canUndo()?"":"disabled"} aria-label="Undo schedule change">↩</button>
           <button class="urbtn" data-action="redo" ${canRedo()?"":"disabled"} aria-label="Redo schedule change">↪</button>
         </div></div>`;
+    const hasItems=BLOCKS.some(b=>plan.blocks[b].items.length>0);
     const cta=locked ? `<button class="btn primary" data-action="ics">📆 Add to Apple Calendar</button>
         <button class="btn ghost2" data-action="gcal">📅 Add to Google Calendar</button>`
-                     : `<button class="btn primary" data-action="commit">Commit this week 🔒</button>`;
+                     : `<button class="btn primary" data-action="commit" ${hasItems?"":"disabled style=\"opacity:.42;cursor:default;\""}>Commit this week 🔒</button>`;
 
     // save-as-default — quiet, collapsed behind a single tap (it's a setting, not a daily action)
     const routineBar=routineOpen
@@ -1471,6 +1532,7 @@ const BrewStore = (function () {
       ${timeline}
       ${routineBar}
       <div class="slip-grid">${slips}</div>
+      ${!locked&&hasItems?`<div style="text-align:center;margin-top:6px"><button class="set-reset" data-action="reset-order">↺ Reset your order</button></div>`:""}
       <div class="commitbar">${cta}
         <p class="note">Tap a slip header to open its menu — set the time, pick items, or add a custom one. Tap the 1×–7× count to set how many days that week. “Add to Apple Calendar” exports a recurring .ics (10-min alarm); one-way export — live sync needs a native step later.</p>
       </div>`;
@@ -1485,12 +1547,13 @@ const BrewStore = (function () {
     else if(act==="count"){ histRecord(); const it=S.getPlan(wk).blocks[b].items.find(x=>x.id===id); const t=it?(it.target%7)+1:1; S.setItemTarget(wk,b,id,t); buzz(10); renderPlan(); }
     else if(act==="remove"){ histRecord(); S.removeItem(wk,b,id); renderPlan(); }
     else if(act==="add"){ histRecord(); S.addItem(wk,b,id); buzz(12); renderPlan(); }
-    else if(act==="start-"){ histRecord(); const s=slot(); S.setBlockSlot(wk,b,{start:clampStart(s.start-15,s.duration),duration:s.duration}); renderPlan(); }
-    else if(act==="start+"){ histRecord(); const s=slot(); S.setBlockSlot(wk,b,{start:clampStart(s.start+15,s.duration),duration:s.duration}); renderPlan(); }
-    else if(act==="dur-"){ histRecord(); const s=slot(); const dur=Math.max(15,s.duration-15); S.setBlockSlot(wk,b,{start:clampStart(s.start,dur),duration:dur}); renderPlan(); }
-    else if(act==="dur+"){ histRecord(); const s=slot(); const dur=Math.min(240,s.duration+15); S.setBlockSlot(wk,b,{start:clampStart(s.start,dur),duration:dur}); renderPlan(); }
-    else if(act==="commit"){ S.commitWeek(wk,true); openSlip=null; buzz(20); renderPlan(); updateStreakBadge(); }
+    else if(act==="start-"){ histRecord(); const s=slot(); S.setBlockSlot(wk,b,{start:clampStart(s.start-5,s.duration),duration:s.duration}); renderPlan(); }
+    else if(act==="start+"){ histRecord(); const s=slot(); S.setBlockSlot(wk,b,{start:clampStart(s.start+5,s.duration),duration:s.duration}); renderPlan(); }
+    else if(act==="dur-"){ histRecord(); const s=slot(); const dur=Math.max(5,s.duration-5); S.setBlockSlot(wk,b,{start:clampStart(s.start,dur),duration:dur}); renderPlan(); }
+    else if(act==="dur+"){ histRecord(); const s=slot(); const dur=Math.min(240,s.duration+5); S.setBlockSlot(wk,b,{start:clampStart(s.start,dur),duration:dur}); renderPlan(); }
+    else if(act==="commit"){ if(!BLOCKS.some(bb=>S.getPlan(wk).blocks[bb].items.length>0)) return; S.commitWeek(wk,true); openSlip=null; buzz(20); renderPlan(); updateStreakBadge(); }
     else if(act==="unlock"){ S.commitWeek(wk,false); renderPlan(); }
+    else if(act==="reset-order"){ if(confirm("Clear all items from all four blocks?")){ histRecord(); BLOCKS.forEach(bb=>S.setBlockItems(wk,bb,[])); openSlip=null; renderPlan(); } }
     else if(act==="repeat"){ histRecord(); S.repeatLastWeek(wk); openSlip=null; buzz(14); renderPlan(); }
     else if(act==="undo"){ doUndo(); }
     else if(act==="redo"){ doRedo(); }
@@ -1571,9 +1634,17 @@ const BrewStore = (function () {
         "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+esc(WORD[b]+" in 10 min"),"TRIGGER:-PT10M","END:VALARM","END:VEVENT");
     });
     L.push("END:VCALENDAR");
-    const blob=new Blob([L.join("\r\n")],{type:"text/calendar;charset=utf-8"});
-    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="brew-"+wk+".ics";
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1500);
+    const content=L.join("\r\n");
+    try{
+      const blob=new Blob([content],{type:"text/calendar;charset=utf-8"});
+      const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="brew-"+wk+".ics";
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+    } catch(_){
+      // fallback for environments where blob URLs are blocked (some iOS webviews)
+      const a=document.createElement("a"); a.href="data:text/calendar;charset=utf-8,"+encodeURIComponent(content);
+      a.download="brew-"+wk+".ics"; document.body.appendChild(a); a.click(); a.remove();
+    }
+    showToast("📆 Calendar file ready — open it to import into Apple Calendar.");
   }
 
   /* ========================= GOOGLE CALENDAR EXPORT ========================= */
@@ -1663,7 +1734,10 @@ const BrewStore = (function () {
     const wk=curWk(), committed=S.isCommitted(wk);
     const days=S.weekDates(wk), todayKey=S.dateKey();
     const full=S.weekFullBrewDays(wk), safe=full>=3;
-    const streakMsg=safe ? `🔥 Streak safe — ${full} full brews this week` : `${3-full} more full brew${3-full===1?"":"s"} keeps your streak 🔥`;
+    const streakMsg=safe ? `🔥 Streak safe — ${full} full brews this week`
+      : full===2 ? `1 more brew to keep your streak alive! ☕️`
+      : full===1 ? `2 more brews this week — you've got this 💪`
+      : `Complete 3 full brews this week to start your streak 🔥`;
     let rows="";
     days.forEach(dk=>{ const [y,m,da]=dk.split("-").map(Number); const dobj=new Date(y,m-1,da);
       const isToday=dk===todayKey, isFuture=dk>todayKey;
@@ -1772,7 +1846,7 @@ const BrewStore = (function () {
       </div>`;
     });
     const pagePct=totTarget?Math.round(totDone/totTarget*100):0;
-    const log=S.getLog(S.dateKey());
+    const log=S.getActiveLog(S.dateKey());
     let feed="";
     if(log.length) log.forEach(e=>{ feed+=`<div class="tb-row"><span class="tb-time">${logTime(e.ts)}</span><span class="tb-item">${e.label}</span><span class="lchip bk-${e.b}">${e.b}</span></div>`; });
     else feed=`<div class="tb-empty">Nothing brewed yet today — tick an item on the Daily Grind.</div>`;
@@ -1812,9 +1886,18 @@ const BrewStore = (function () {
     const dateLabel=base.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
     const hij=S.hijri(base,{day:"numeric",month:"long"})+" AH";
     const log=S.getLog(dk);
+    const hasRemoved=log.some(e=>e.removed);
     let lines="";
-    if(log.length) log.forEach(e=>{ lines+=`<div class="slip-line"><span class="sl-name">${logTime(e.ts)}</span><span class="sl-leader"></span><span class="lg-item">${e.label}</span><span class="lchip bk-${e.b}">${e.b}</span></div>`; });
-    else lines=`<div class="slip-empty">— nothing brewed this day —</div>`;
+    if(log.length){
+      log.forEach(e=>{
+        if(e.removed){
+          lines+=`<div class="slip-line lb-removed"><span class="sl-name">${logTime(e.ts)}</span><span class="sl-leader"></span><span class="lg-item">${e.label}</span><span class="lchip bk-${e.b}">${e.b}</span><button class="lb-x" data-action="log-remove" data-dk="${dk}" data-b="${e.b}" data-id="${e.id}" title="Remove from log">✕</button></div>`;
+        } else {
+          lines+=`<div class="slip-line"><span class="sl-name">${logTime(e.ts)}</span><span class="sl-leader"></span><span class="lg-item">${e.label}</span><span class="lchip bk-${e.b}">${e.b}</span></div>`;
+        }
+      });
+    } else lines=`<div class="slip-empty">— nothing brewed this day —</div>`;
+    const activeCount=log.filter(e=>!e.removed).length;
     logModal.innerHTML=`<div class="logback" data-action="closelog"></div>
       <div class="slip logreceipt r-R open">
         <div class="tack"></div>
@@ -1824,7 +1907,9 @@ const BrewStore = (function () {
         ${!isToday?`<button class="today-pill" data-action="logtoday" style="margin:4px auto 0;display:block;">Today</button>`:""}
         <div class="slip-tear"></div>
         <div class="slip-lines">${lines}</div>
-        <div class="slip-foot"><span>TODAY'S BREW · LOG</span><span>${log.length} item${log.length===1?"":"s"}</span></div>
+        ${hasRemoved?`<button class="lb-clear" data-action="log-clear" data-dk="${dk}">Clear removed</button>`:""}
+        <div class="slip-foot"><span>BREW LOG</span><span>${activeCount} item${activeCount===1?"":"s"}</span></div>
+        <button class="lg-grind-btn" data-action="viewingrind" data-dk="${dk}">☕️ View in Daily Grind</button>
         <button class="lg-close" data-action="closelog">close</button>
       </div>`;
     logModal.classList.add("on");
@@ -1835,6 +1920,13 @@ const BrewStore = (function () {
     else if(t.dataset.action==="logprev"){ logDayOffset--; renderLogModal(); }
     else if(t.dataset.action==="lognext" && logDayOffset<0){ logDayOffset++; renderLogModal(); }
     else if(t.dataset.action==="logtoday"){ logDayOffset=0; renderLogModal(); }
+    else if(t.dataset.action==="log-remove"){ S.removeLogEntry(t.dataset.dk, t.dataset.b, t.dataset.id); renderLogModal(); }
+    else if(t.dataset.action==="log-clear"){ S.clearRemovedLog(t.dataset.dk); renderLogModal(); }
+    else if(t.dataset.action==="viewingrind"){
+      logModal.classList.remove("on");
+      if(window.grindGoToDay) window.grindGoToDay(t.dataset.dk);
+      showView("grind");
+    }
   });
 
   /* ========================= SETTINGS ========================= */
@@ -1963,6 +2055,14 @@ const BrewStore = (function () {
         <button class="set-reset-big" data-action="reset-all">↺ Reset all settings to defaults</button>
       </div>
 
+      <div class="set-section">
+        <div class="set-label">Danger zone</div>
+        <div class="set-danger">
+          <div class="set-danger-hint">Permanently erases all plans, ticks, notes, and log. Your settings (name, location, times) are kept.</div>
+          <button class="set-danger-btn" data-action="nuke-data">🗑 Reset all data</button>
+        </div>
+      </div>
+
       <div class="apply-bar">
         <div id="applyFlash" class="apply-flash">✓ Changes applied</div>
         <button class="btn primary apply-btn ${isDirty()?"":"is-clean"}" data-action="apply">${isDirty()?"Apply changes":"All changes applied"}</button>
@@ -1984,7 +2084,7 @@ const BrewStore = (function () {
   settingsRoot.addEventListener("click", e=>{
     const t=e.target.closest("[data-action]"); if(!t) return;
     const a=t.dataset.action, b=t.dataset.b, id=t.dataset.id;
-    if(a==="back"){ if(isDirty() && !confirm("Discard your unsaved changes?")) return; discardDraft(); showView("grind"); }
+    if(a==="back"){ if(isDirty() && !confirm("Discard your unsaved changes?")) return; discardDraft(); showView(prevView||"grind"); }
     else if(a==="apply"){ if(isDirty()) applyChanges(); }
     else if(a==="geoloc"){ requestGeo(); }
     else if(a==="setcoords"){ const lat=parseFloat(document.getElementById("setLat").value), lon=parseFloat(document.getElementById("setLon").value);
@@ -2006,6 +2106,7 @@ const BrewStore = (function () {
     else if(a==="reset-blocks"){ if(confirm("Reset all block times to defaults?")){ setBlockOpen=null; setS(s=>{ delete s.blocks; }); renderSettings(); } }
     else if(a==="reset-menu"){ if(confirm("Reset activities menu to defaults?")){ setS(s=>{ delete s.menu; delete s.starterItems; }); renderSettings(); } }
     else if(a==="reset-all"){ if(confirm("Reset settings to defaults? This restores your name, location, week start, block times and activities menu.")){ setBlockOpen=null; setS(s=>{ for(const k of Object.keys(s)) delete s[k]; }); renderSettings(); } }
+    else if(a==="nuke-data"){ if(confirm("This will permanently erase all your brew plans, tick history, notes, and log. Settings are kept. This cannot be undone.")){ const saved=S.getSavedSettings(); S.reset().then(()=>{ S.saveSettings(saved); location.reload(); }); } }
   });
   settingsRoot.addEventListener("change", e=>{
     if(e.target.id==="setCity" && e.target.value!==""){ const c=CITIES[+e.target.value]; setS(s=>{ s.loc={lat:c.lat,lon:c.lon,label:c.label,tz:c.tz}; }); renderSettings(); }
