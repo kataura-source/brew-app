@@ -2,8 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>BREW</title>
+<meta name="description" content="Plan your mornings, tick your blocks, fill your cup. Begin with barakah, read, exercise, work." />
+<!-- PWA: installable to the home screen, works offline -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#f6ecdd" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="BREW" />
 <style>
   :root {
     --cream: #f6ecdd;
@@ -29,8 +39,14 @@
     background: radial-gradient(140% 90% at 50% -10%, #fff7ec 0%, var(--cream) 45%, var(--latte) 100%);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    /* installed-app feel: no rubber-band scroll, no long-press callout menu */
+    overscroll-behavior-y: none;
+    -webkit-touch-callout: none;
   }
-  .app { max-width: 440px; margin: 0 auto; min-height: 100%; padding: 22px 20px 104px; position: relative; }
+  input, textarea { -webkit-touch-callout: default; }
+  /* safe-area insets so the notch and home indicator never cover content when installed */
+  .app { max-width: 440px; margin: 0 auto; min-height: 100%; position: relative;
+    padding: max(22px, env(safe-area-inset-top)) 20px calc(104px + env(safe-area-inset-bottom)); }
 
   /* ---------- header ---------- */
   .appbar { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
@@ -142,7 +158,8 @@
   .view.active { display:block; animation: fadev .25s ease; }
   @keyframes fadev { from{opacity:0; transform:translateY(5px)} to{opacity:1;transform:none} }
   .tabbar {
-    position: fixed; left:50%; transform:translateX(-50%); bottom:14px;
+    position: fixed; left:50%; transform:translateX(-50%);
+    bottom: calc(14px + env(safe-area-inset-bottom));
     width: min(412px, calc(100% - 28px));
     display:flex; gap:5px; padding:6px;
     background: rgba(251,244,232,.92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -154,6 +171,25 @@
     opacity:.5; transition: all .2s ease; touch-action:manipulation; }
   .tab span { font-size:18px; line-height:1; }
   .tab.active { opacity:1; background:#fff; color:var(--caramel-deep); box-shadow: 0 4px 10px -6px rgba(74,49,32,.4); }
+
+  /* ---------- add-to-home-screen hint (browser only, never when installed) ---------- */
+  .a2hs {
+    display:none; position:fixed; left:50%; transform:translateX(-50%);
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    width: min(412px, calc(100% - 28px));
+    align-items:center; gap:10px; padding:10px 12px;
+    background: rgba(251,244,232,.96); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border:1px solid var(--line); border-radius:16px; box-shadow: var(--shadow); z-index:39;
+    animation: fadev .3s ease;
+  }
+  .a2hs.on { display:flex; }
+  .a2hs-ico { font-size:20px; flex-shrink:0; }
+  .a2hs-txt { flex:1; font-size:11.5px; line-height:1.4; color:var(--coffee); }
+  .a2hs-txt b { color:var(--espresso); }
+  .a2hs-btn { border:none; background:var(--bark); color:#fff; font-family:var(--font);
+    font-size:11px; font-weight:800; padding:7px 11px; border-radius:10px; cursor:pointer; flex-shrink:0; }
+  .a2hs-x { border:none; background:none; color:var(--coffee); opacity:.5; cursor:pointer;
+    font-size:17px; line-height:1; padding:2px 4px; flex-shrink:0; }
 
   /* block colour chips */
   .bk-B{ background:#3a2417; color:#fff; }
@@ -700,6 +736,13 @@
 
     <!-- rotating daily quote (shown on every page) -->
     <div class="quote" id="quote"></div>
+
+    <div class="a2hs" id="a2hs">
+      <div class="a2hs-ico">☕️</div>
+      <div class="a2hs-txt" id="a2hsTxt"></div>
+      <button class="a2hs-btn" id="a2hsBtn" hidden>Install</button>
+      <button class="a2hs-x" id="a2hsX" aria-label="Dismiss">✕</button>
+    </div>
 
     <nav class="tabbar">
       <button class="tab" data-view="calendar"><span>🗓️</span>Calendar</button>
@@ -2346,6 +2389,69 @@ const BrewStore = (function () {
     nameModal.classList.add("on");                                   // first-launch: ask the name first
   } else if(!localStorage.getItem("brew.welcomed")){
     localStorage.setItem("brew.welcomed","1"); openInfo();           // returning early user who never saw the welcome
+  }
+})();
+</script>
+
+<!-- ============ 4 · PWA: service worker + add-to-home-screen hint ============ -->
+<script>
+(function(){
+  const HTTP = location.protocol === "http:" || location.protocol === "https:";
+
+  // Register the offline shell. Skipped on file:// (no SW there) so local testing still works.
+  if(HTTP && "serviceWorker" in navigator){
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(()=>{});   // silent: app works fine without it
+    });
+  }
+
+  const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  if(installed || localStorage.getItem("brew.a2hs") === "off") return;
+
+  const bar = document.getElementById("a2hs");
+  const txt = document.getElementById("a2hsTxt");
+  const btn = document.getElementById("a2hsBtn");
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+             || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let deferred = null;
+
+  // Chrome/Edge/Android give us a real install prompt.
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault(); deferred = e;
+    txt.innerHTML = "Install <b>BREW</b> for a home-screen icon and offline access.";
+    btn.hidden = false; queue();
+  });
+
+  // iOS has no prompt — Safari's Share sheet is the only route, so spell it out.
+  if(isIOS && HTTP){
+    txt.innerHTML = "Add <b>BREW</b> to your home screen: tap <b>Share</b> then <b>Add to Home Screen</b>.";
+    queue();
+  }
+
+  btn.addEventListener("click", async () => {
+    if(!deferred) return;
+    bar.classList.remove("on");
+    deferred.prompt(); deferred = null;
+  });
+  document.getElementById("a2hsX").addEventListener("click", () => {
+    bar.classList.remove("on");
+    localStorage.setItem("brew.a2hs","off");                     // dismissed = don't nag again
+  });
+  window.addEventListener("appinstalled", () => {
+    bar.classList.remove("on");
+    localStorage.setItem("brew.a2hs","off");
+  });
+
+  // Wait for the onboarding / welcome modals to clear before sliding the hint in.
+  function queue(){
+    let tries = 0;
+    (function tick(){
+      if(localStorage.getItem("brew.a2hs") === "off") return;
+      // .infomodal covers both the welcome and the name modal; also wait out log + celebration
+      const modalOpen = document.querySelector(".infomodal.on, .logmodal.on, .celebrate.on");
+      if(!modalOpen){ bar.classList.add("on"); return; }
+      if(++tries < 25) setTimeout(tick, 2000);
+    })();
   }
 })();
 </script>

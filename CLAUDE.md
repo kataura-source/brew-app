@@ -19,14 +19,34 @@ A gamified morning-routine habit tracker with a café/coffee theme. Completing a
 ## Technical Overview
 
 ### Critical constraint
-**Single self-contained file: `index.html`.** No external `.js` or `.css` files. Everything inlined. Reason: `file://` URLs and in-app preview panels don't load external resources. Do not split until the native iOS port.
+**All app logic and styling lives in the single file `index.html`.** No external `.js` or `.css` for app code. Everything inlined. Reason: `file://` URLs and in-app preview panels don't load external resources. Do not split until the native iOS port.
+
+**The only exception is PWA deployment infra** (see below): `manifest.json`, `sw.js`, `icons/`. These carry no app logic, and `index.html` still runs standalone from `file://` without them — the service-worker registration is guarded on `http(s):` and fails silently.
 
 ### File structure (inside index.html)
 1. `<script>` block 1 — **BrewStore IIFE** — entire data layer, settings, migrations
 2. `<script>` block 2 — **Daily Grind** — pixel cup, block ticking, celebration, day navigation
 3. `<script>` block 3 — **Planner / Calendar / Progress / Settings / Nav**
-4. Inline `<style>` — all CSS
-5. Inline HTML — all views and modals
+4. `<script>` block 4 — **PWA** — service-worker registration + add-to-home-screen hint
+5. Inline `<style>` — all CSS
+6. Inline HTML — all views and modals
+
+### PWA (installable, offline) — added 2026-07-30
+Lets testers install BREW to their home screen with no App Store, no Apple Developer account.
+
+| File | Purpose |
+|------|---------|
+| `manifest.json` | name/icons/colors, `display: standalone`, `start_url: "./"` — relative so it survives any deploy path |
+| `sw.js` | offline shell. Precaches 8 files. **Navigations are network-first** (a reload always gets the newest build) with cache fallback; other same-origin GETs are cache-first. Bump `CACHE` on deploy. |
+| `icons/*.png` | 32/180/192/512 + a 512 maskable (extra padding for Android's mask). `icon-180` is the `apple-touch-icon`. |
+| `tools-mkicons.py` | regenerates every icon from the app's own 18×20 `POT` pixel art, reusing the same band + dither logic, so icons always match the cup. Needs only stdlib (`zlib`). |
+
+iOS notes that matter:
+- iOS has **no install prompt** — Share → Add to Home Screen is the only route, so the app shows a dismissible hint bar (`.a2hs`) explaining it. Android/Chrome instead get a real **Install** button via `beforeinstallprompt`.
+- The hint never shows when already installed (`display-mode: standalone` / `navigator.standalone`), and waits for the onboarding/welcome modals to close first.
+- `viewport-fit=cover` + `env(safe-area-inset-*)` on `.app` and `.tabbar` keep content clear of the notch and home indicator.
+- **Installed iOS PWAs get their own storage container**, separate from Safari's. Data ticked in Safari does not carry into the installed app — tell testers to install first, then use only the installed icon.
+- Installed PWAs are exempt from Safari's 7-day storage eviction; browser tabs are not. Another reason to install.
 
 ### Testing
 Logic verified via `osascript -l JavaScript` (JavaScriptCore). Stubs required:
@@ -36,7 +56,18 @@ const localStorage={_d:{},getItem(k){return this._d[k]??null},setItem(k,v){this.
 const setTimeout=()=>{};
 const requestAnimationFrame=()=>{};
 ```
-After edits: `open "index.html"` and Cmd+R in browser. Preview panel is render-only (no taps).
+After edits: `open "index.html"` and Cmd+R in browser.
+
+**Testing the PWA bits** needs a real `http://` origin (service workers and `manifest.json` never work on `file://`). The sandbox blocks a server from reading files under `~/Desktop`, so mirror the files to `/tmp/brewprev` and serve that — this is what `.claude/launch.json` points at:
+```bash
+mkdir -p /tmp/brewprev/icons && cd "/Users/amnaikhwan/Desktop/BREW app" && cp index.html manifest.json sw.js /tmp/brewprev/ && cp icons/*.png /tmp/brewprev/icons/
+```
+Re-copy after every edit — the mirror is a snapshot, not a symlink.
+Then verify in the browser pane: registration + `caches.keys()`, then stop the server and reload — the app must still render. To prove the network is genuinely down, fetch a URL that is *not* precached (a cached one is served by the SW and looks like success either way).
+
+Gotchas hit while verifying, worth not repeating:
+- Don't hand-mutate modal classes to "preview" UI state; it leaves the app in a state it never reaches naturally and produced a false regression report.
+- `computer` click coordinates are **screenshot-pixel** space, which is not CSS space when the screenshot is scaled. A ref-click that silently misses looks exactly like a broken event handler. Confirm with `elementFromPoint` or a synthetic `.click()` before concluding anything is broken.
 
 ### localStorage keys
 | Key | Content |
@@ -51,6 +82,8 @@ After edits: `open "index.html"` and Cmd+R in browser. Preview panel is render-o
 | `brew.notes.v1` | `{ [YYYY-MM-DD]: "text" }` — optional morning notes per day |
 | `brew.celeb.v1` | `{ [YYYY-MM-DD]: true }` — celebration tracking |
 | `brew.welcomed` | `"1"` once info modal shown — controls first-launch auto-show |
+| `brew.onboarded` | `"1"` once the name prompt is answered or skipped |
+| `brew.a2hs` | `"off"` once the add-to-home-screen hint is dismissed or the app is installed |
 
 ### IndexedDB
 Store `brew-photos`, object store `photos` keyed by `{date, block, id}`. Blob photo data. UI not yet built.
@@ -165,11 +198,16 @@ S.saveRoutineFromWeek(wk, mode)  // "sunrise" or "fixed"
 - **Coffee beans** — earn currency by completing blocks/brews
 - **Mug shop** — spend beans to unlock different pixel-art mugs to display on Daily Grind
 
-### iOS App (next major milestone)
+### Trials (current)
+- **The PWA is the trial vehicle** — testers install from the Netlify URL, no App Store or Apple Developer account needed.
+- Native iOS is deliberately deferred: TestFlight requires the **$99/yr Apple Developer Program**, and a free Apple ID can only sideload to your own device with builds that expire after 7 days. Not viable for outside testers.
+
+### iOS App (later major milestone)
 - The web prototype (`index.html`) is feature-complete enough to start the iOS port
 - Stack: SwiftUI, EventKit (calendar export), camera (photo stamps), haptics
 - The web app serves as the full design/logic spec for the native build
 - Do NOT split index.html into separate files until the iOS port begins
+- Prerequisites not yet in place: full **Xcode** is not installed (only Command Line Tools), and no Apple Developer account
 
 ### Not yet built (web)
 - Photo capture / stamps (IndexedDB store ready, UI not built)
@@ -185,7 +223,8 @@ S.saveRoutineFromWeek(wk, mode)  // "sunrise" or "fixed"
 
 > Keep concise. One line per item. Most recent at top.
 
-- **2026-06-27:** Git repo initialized; pushed to github.com/amnaaikhwan-source/brew-app; connected to Netlify (brewappwebtest3.netlify.app) with auto-deploy on push to main.
+- **2026-07-30:** Made the app an installable PWA (manifest, service worker, icons generated from the app's own mug art, iOS add-to-home-screen hint, safe-area insets). Verified offline load with the server stopped. Chose PWA over a native port for trials — TestFlight needs a paid Apple account and Xcode isn't installed.
+- **2026-06-27:** Git repo initialized; pushed to github.com/kataura-source/brew-app (account was later renamed from `amnaaikhwan-source`); connected to Netlify (brewappwebtest3.netlify.app) with auto-deploy on push to main.
 - **2026-06-27:** Reorganized CLAUDE.md to serve as single source of truth with structured sections.
 - **2026-06-27:** Verified g-edit absolute positioning fix — all 4 slips render within viewport, no overflow.
 - **2026-06-27 (earlier session):** Added edit-block icon (✎) on Grind slips → opens planner menu with commit-unlock confirm. 7-cycle deterministic mug sticker rotations. Mug/pencil positioning refined (mug in bsq-group, pencil in dnum-row). Undo/redo changed to horizontal ↩↪. Whole-receipt clickable in planner. Celebration replays on empty→fill transition only.
