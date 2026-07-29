@@ -2,7 +2,7 @@
 
 A gamified morning-routine tracker with a café theme. Complete all four blocks — **B**egin with barakah, **R**ead & reflect, **E**xercise & energise, **W**ork — and you've made a brew. Three full brews in a week keeps your streak.
 
-**Live:** https://brewappwebtest3.netlify.app
+**Live:** https://brewappweb.netlify.app
 
 ---
 
