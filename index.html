@@ -12,7 +12,9 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<!-- black-translucent lets the cream background run behind the status bar instead of
+     iOS painting a white strip there; .app adds safe-area-inset-top so nothing hides under it -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="BREW" />
 <style>
   :root {
@@ -36,7 +38,8 @@
     height: 100%;
     font-family: var(--font);
     color: var(--espresso);
-    background: radial-gradient(140% 90% at 50% -10%, #fff7ec 0%, var(--cream) 45%, var(--latte) 100%);
+    background-color: var(--cream);   /* solid fallback: iOS can't sample a gradient for the status bar area */
+    background-image: radial-gradient(140% 90% at 50% -10%, #fff7ec 0%, var(--cream) 45%, var(--latte) 100%);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
     /* installed-app feel: no rubber-band scroll, no long-press callout menu */
@@ -44,9 +47,12 @@
     -webkit-touch-callout: none;
   }
   input, textarea { -webkit-touch-callout: default; }
-  /* safe-area insets so the notch and home indicator never cover content when installed */
+  /* safe-area insets so the notch and home indicator never cover content when installed.
+     top is inset + 22px, not max(): the page now runs under the status bar, so the inset is
+     consumed by the bar itself and the 22px is the breathing room below it. Both insets are
+     0 in a normal browser tab, leaving the original 22px / 104px untouched. */
   .app { max-width: 440px; margin: 0 auto; min-height: 100%; position: relative;
-    padding: max(22px, env(safe-area-inset-top)) 20px calc(104px + env(safe-area-inset-bottom)); }
+    padding: calc(22px + env(safe-area-inset-top)) 20px calc(104px + env(safe-area-inset-bottom)); }
 
   /* ---------- header ---------- */
   .appbar { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
